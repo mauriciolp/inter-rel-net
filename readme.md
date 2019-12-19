@@ -53,7 +53,8 @@ Here are the setup steps per dataset:
 	1. Save extracted keypoints at 'data/ut-interaction/'. Check 'src/datasets/UT.py' for an explanation on the expected directory structure.
 	- **Obs:** Alternatively we provide the skeleton information extracted by us [here](https://drive.google.com/file/d/1gh_1OBjUbfBg2KEmypfZxgmoguoXpRZp/view?usp=sharing)
 - **NTU** and **NTU-V2**
-	1. Although the dataset is available at its [project page](http://rose1.ntu.edu.sg/datasets/actionrecognition.asp), it is recommended to download only the  skeletons at [github page](https://github.com/shahroudy/NTURGB-D/).
+	1. Download the skeleton information from the dataset [project page](http://rose1.ntu.edu.sg/datasets/actionrecognition.asp) or at the [github page](https://github.com/shahroudy/NTURGB-D/).
+		- 'nturgbd_skeletons_s001_to_s017.zip' and 'nturgbd_skeletons_s018_to_s032.zip'
 	1. Run script `src/set-up_ntu_skl.py` to read the skeletons from the zip files and generate a single csv file with all the normalized coordinates.
 		- Run first for version 1: `python src/set-up_ntu_skl.py 1`
 		- Then for version 2: `python src/set-up_ntu_skl.py 2`
