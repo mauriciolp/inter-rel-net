@@ -54,9 +54,12 @@ Here are the setup steps per dataset:
 	- **Obs:** Alternatively we provide the skeleton information extracted by us [here](https://drive.google.com/file/d/1gh_1OBjUbfBg2KEmypfZxgmoguoXpRZp/view?usp=sharing)
 - **NTU** and **NTU-V2**
 	1. Although the dataset is available at its [project page](http://rose1.ntu.edu.sg/datasets/actionrecognition.asp), it is recommended to download only the  skeletons at [github page](https://github.com/shahroudy/NTURGB-D/).
-	1. Run script `src/set-up_ntu_skl.py` for reading the skeletons from the zip files and generating a single csv file with all the normalized coordinates.
+	1. Run script `src/set-up_ntu_skl.py` to read the skeletons from the zip files and generate a single csv file with all the normalized coordinates.
 		- Run first for version 1: `python src/set-up_ntu_skl.py 1`
 		- Then for version 2: `python src/set-up_ntu_skl.py 2`
+		- **Obs:** These can take several minutes to complete.
+	1. Run script `src/set-up_ntu_skl.py` with `-c` option to convert csv files to npy (faster to read).
+		- Ex: `python src/set-up_ntu_skl.py 1 -c` and `python src/set-up_ntu_skl.py 2 -c`
 		- **Obs:** These can take several minutes to complete.
 
 If the data is obtained in a different way, or is stored at a different format,
