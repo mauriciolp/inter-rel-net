@@ -4,7 +4,7 @@ Code used at paper "Interaction Relational Network for Mutual Action Recognition
 It contains an implementation of our Interaction Relational Network (IRN), an end-to-end NN tailored for Interaction Recognition using Skeleton information. 
 
 <div align="center">
-    <img src="./summary_IRN.png">
+    <img src="./summary_IRN.png", width="450">
 </div>
 
 More details at the preprint: https://arxiv.org/abs/1910.04963
