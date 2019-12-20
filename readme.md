@@ -46,11 +46,11 @@ Here are the setup steps per dataset:
 
 - **SBU**
 	1. Download dataset from respective [project page](https://www3.cs.stonybrook.edu/~kyun/research/kinect_interaction/index.html) (Clean version)
-	1. Unzip all zipped sets at the same folder: 'data/sbu/'
+	1. Unzip all zipped sets at the same folder: *'data/sbu/'*
 - **UT**
 	1. Download dataset from respective [project page](http://cvrc.ece.utexas.edu/SDHA2010/Human_Interaction.html#Data) (segmented_set1 & segmented_set2)
 	1. Run [OpenPose](https://github.com/CMU-Perceptual-Computing-Lab/openpose) to extract skeleton information
-	1. Save extracted keypoints at 'data/ut-interaction/'. Check 'src/datasets/UT.py' for an explanation on the expected directory structure.
+	1. Save extracted keypoints at *'data/ut-interaction/'*. Check *'src/datasets/UT.py'* for an explanation on the expected directory structure.
 	- **Obs:** Alternatively we provide the skeleton information extracted by us [here](https://drive.google.com/file/d/1gh_1OBjUbfBg2KEmypfZxgmoguoXpRZp/view?usp=sharing)
 - **NTU** and **NTU-V2**
 	1. Download the skeleton information from the dataset [project page](http://rose1.ntu.edu.sg/datasets/actionrecognition.asp) or at the [github page](https://github.com/shahroudy/NTURGB-D/).
@@ -64,7 +64,7 @@ Here are the setup steps per dataset:
 		- **Obs:** These can take several minutes to complete.
 
 If the data is obtained in a different way, or is stored at a different format,
-it is necessary to adapt the code at 'src/datasets' and 'src/misc/data_io.py'.
+it is necessary to adapt the code at *'src/datasets'* and *'src/misc/data_io.py'*.
 
 ### Running the code
 
@@ -96,6 +96,15 @@ python src/run_protocol.py LSTM-IRN_inter+intra \
 
 python src/run_protocol.py LSTM-IRN_inter \
 	configs/NTU-V1/LSTM-IRN_inter.cfg NTU -t -f cross_subject
+```
+
+Models and results will be saved at folder: *'models/DATASET/EXPERIMENT_NAME/'*. Use script `misc/print_train_stats.py` to the results stored at the expreriment folder. Usage examples:
+
+```
+python src/misc/print_train_stats.py models/SBU/* 
+
+python src/misc/print_train_stats.py models/NTU/LSTM-IRN_inter/fold_cross_subject/ \
+	models/NTU/LSTM-IRN_inter/fold_cross_setup/ 
 ```
 
 ## Results
