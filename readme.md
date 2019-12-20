@@ -104,7 +104,7 @@ Models and results will be saved at folder: *'models/DATASET/EXPERIMENT_NAME/'*.
 python src/misc/print_train_stats.py models/SBU/* 
 
 python src/misc/print_train_stats.py models/NTU/LSTM-IRN_inter/fold_cross_subject/ \
-	models/NTU/LSTM-IRN_inter/fold_cross_setup/ 
+	models/NTU/LSTM-IRN_inter/fold_cross_view/ 
 ```
 
 ## Results
