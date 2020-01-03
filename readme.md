@@ -27,7 +27,7 @@ More details at the preprint: https://arxiv.org/abs/1910.04963
 
 ## Requirements
 
-Our proposed method Interaction Relational Network (IRN) was implemented on python, using Keras framework with TensorFlow as backend. Altough we have not tested with other backends, such as Theano, we believe it should not matter.
+Our proposed method Interaction Relational Network (IRN) was implemented on Python, using Keras framework with TensorFlow as backend. Altough we have not tested with other backends, such as Theano, we believe it should not matter.
 
 Software and libraries version:
 
@@ -98,10 +98,10 @@ python src/run_protocol.py LSTM-IRN_inter \
 	configs/NTU-V1/LSTM-IRN_inter.cfg NTU -t -f cross_subject
 ```
 
-Models and results will be saved at folder: *'models/DATASET/EXPERIMENT_NAME/'*. Use script `misc/print_train_stats.py` to the results stored at the expreriment folder. Usage examples:
+Models and results will be saved at folder: *'models/DATASET/EXPERIMENT_NAME/'*. Use script `misc/print_train_stats.py` to print the results stored at the expreriment folder. Usage examples:
 
 ```
-python src/misc/print_train_stats.py models/SBU/* 
+python src/misc/print_train_stats.py models/SBU/* -c val_acc
 
 python src/misc/print_train_stats.py models/NTU/LSTM-IRN_inter/fold_cross_subject/ \
 	models/NTU/LSTM-IRN_inter/fold_cross_view/ 
