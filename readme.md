@@ -101,7 +101,7 @@ python src/run_protocol.py LSTM-IRN_inter \
 Models and results will be saved at folder: *'models/DATASET/EXPERIMENT_NAME/'*. Use script `misc/print_train_stats.py` to print the results stored at the expreriment folder. Usage examples:
 
 ```
-python src/misc/print_train_stats.py models/SBU/* -c val_acc
+python src/misc/print_train_stats.py models/SBU/* -c val_accuracy
 
 python src/misc/print_train_stats.py models/NTU/LSTM-IRN_inter/fold_cross_subject/ \
 	models/NTU/LSTM-IRN_inter/fold_cross_view/ 
