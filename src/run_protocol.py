@@ -34,7 +34,7 @@ def load_args():
     ap.add_argument('-n','--num-reruns',
         help="number of reruns per fold",
         type=int,
-        default=1)
+        default=4)
     ap.add_argument('-f','--folds',
         help="list of folds to run",
         nargs='*')
@@ -83,7 +83,7 @@ def run_protocol(experiment_name, config_filepath, dataset_name, num_reruns=2,
             for weights_filepath in fusion_kwargs['weights_filepaths'] ]
         fusion_kwargs.pop('weights_filepaths', None)
         criteria = fusion_kwargs.pop('criteria', 
-            'val_loss' if fusion_mode == 'middle' else 'val_accuracy')
+            'val_loss' if fusion_mode == 'middle' else 'val_acc')
         data_kwargs, model_kwargs, _ = read_config(
             fusion_kwargs['config_filepaths'][0])
     
@@ -168,7 +168,7 @@ def run_protocol(experiment_name, config_filepath, dataset_name, num_reruns=2,
                 for weights_base_path in weights_base_paths ]
             print('> fold weights filepaths:', fold_weights_filepaths)
         
-        if seqs_eval: reruns_val_accuracy_seqs = []
+        if seqs_eval: reruns_val_acc_seqs = []
         best_epochs = []
         for rerun_idx in range(num_reruns):
             output_path = fold_path+'/rerun_{}'.format(rerun_idx)
@@ -204,57 +204,57 @@ def run_protocol(experiment_name, config_filepath, dataset_name, num_reruns=2,
                 hist_df = parse_fit_history(fit_history)
                 hist_df.to_csv(output_path+'/fit_history.csv', index=False)
             
-            sorted_hist_df = hist_df.sort_values(['val_accuracy', 'val_loss'], 
+            sorted_hist_df = hist_df.sort_values(['val_acc', 'val_loss'], 
                 ascending=[False, True])
             best_epoch = sorted_hist_df.iloc[0]
-            print("> {}: ACC: {:.2%} Loss: {:.4f} - MAX val_accuracy: {:.2%} val_Loss: {:.4f}".format(
-                rerun_idx, best_epoch.accuracy, best_epoch.loss, 
-                best_epoch.val_accuracy, best_epoch.val_loss))
+            print("> {}: ACC: {:.2%} Loss: {:.4f} - MAX val_ACC: {:.2%} val_Loss: {:.4f}".format(
+                rerun_idx, best_epoch.acc, best_epoch.loss, 
+                best_epoch.val_acc, best_epoch.val_loss))
             best_epochs.append(best_epoch)
             
             if seqs_eval:
                 rerun_path = output_path
-                pooled_val_accuracy_filepath = rerun_path+'/pooled_val_accuracy.csv'
-                if os.path.exists(pooled_val_accuracy_filepath):
-                    val_accuracy_df = pd.read_csv(pooled_val_accuracy_filepath)
+                pooled_val_acc_filepath = rerun_path+'/pooled_val_acc.csv'
+                if os.path.exists(pooled_val_acc_filepath):
+                    val_acc_df = pd.read_csv(pooled_val_acc_filepath)
                 else:
-                    weights_path = rerun_path+'/relnet_weights-val_accuracy.hdf5'
+                    weights_path = rerun_path+'/relnet_weights-val_acc.hdf5'
                     
                     if fusion_mode is None:
-                        val_accuracy = predict_rn_seq(weights_path, dataset_codename, 
+                        val_acc = predict_rn_seq(weights_path, dataset_codename, 
                             dataset_fold=dataset_fold, batch_size=batch_size, verbose=verbose,
                             data_kwargs_seqs=data_kwargs_seqs, model_kwargs=model_kwargs, 
                             return_acc=True)
                     elif fusion_mode == 'middle':
-                        val_accuracy = predict_fused_rn_seq(weights_path, dataset_codename, 
+                        val_acc = predict_fused_rn_seq(weights_path, dataset_codename, 
                             dataset_fold=dataset_fold, batch_size=batch_size, verbose=verbose,
                             **fusion_kwargs, return_acc=True)
                     else:
                         print("Seqs eval not implemented for fusion_mode:", fusion_mode)
-                        val_accuracy = -1
+                        val_acc = -1
                     
-                    val_accuracy_df = pd.DataFrame.from_dict({'val_accuracy': [val_accuracy]})
-                    val_accuracy_df.to_csv(pooled_val_accuracy_filepath, index=False)
+                    val_acc_df = pd.DataFrame.from_dict({'val_acc': [val_acc]})
+                    val_acc_df.to_csv(pooled_val_acc_filepath, index=False)
             
-                val_accuracy_series = val_accuracy_df.iloc[0]
-                print("> Pooled Seqs val_accuracy: {:.2%}".format(val_accuracy_series.val_accuracy))
-                reruns_val_accuracy_seqs.append(val_accuracy_series)
+                val_acc_series = val_acc_df.iloc[0]
+                print("> Pooled Seqs val_ACC: {:.2%}".format(val_acc_series.val_acc))
+                reruns_val_acc_seqs.append(val_acc_series)
         
         summary_fold = pd.concat(best_epochs, axis=1).transpose().reset_index(drop=True)
         summary_fold.index.name = 'rerun'
         summary_fold.to_csv(fold_path+'/summary.csv')
         
-        sorted_summary_fold = summary_fold.sort_values(['val_accuracy', 'val_loss'], 
+        sorted_summary_fold = summary_fold.sort_values(['val_acc', 'val_loss'], 
             ascending=[False, True])
         best_fold = sorted_summary_fold.iloc[0]
         fold_results.append(best_fold)
         
         if seqs_eval:
-            summary_fold_seqs = pd.concat(reruns_val_accuracy_seqs, axis=1).transpose().reset_index(drop=True)
+            summary_fold_seqs = pd.concat(reruns_val_acc_seqs, axis=1).transpose().reset_index(drop=True)
             summary_fold_seqs.index.name = 'rerun'
-            summary_fold_seqs.to_csv(fold_path+'/summary-pooled_val_accuracy.csv')
+            summary_fold_seqs.to_csv(fold_path+'/summary-pooled_val_acc.csv')
             
-            best_fold_seqs = summary_fold_seqs.loc[summary_fold_seqs.val_accuracy.idxmax()]
+            best_fold_seqs = summary_fold_seqs.loc[summary_fold_seqs.val_acc.idxmax()]
             fold_results_seqs.append(best_fold_seqs)
     
     summary_df = pd.concat(fold_results, axis=1).transpose().reset_index(drop=True)
@@ -270,12 +270,12 @@ def run_protocol(experiment_name, config_filepath, dataset_name, num_reruns=2,
     print("\nSummary for Dataset, Folds, Experiment:")
     print("> {} | {} | {}".format(dataset_codename, dataset_folds, experiment_name))
     pretty_print_stats(summary_df)
-    print("Val ACC Mean: {:.2%} Std: {:.4f}".format(mean.val_accuracy, std.val_accuracy))
+    print("Val ACC Mean: {:.2%} Std: {:.4f}".format(mean.val_acc, std.val_acc))
     
     if seqs_eval:
         summary_seqs = pd.concat(fold_results_seqs, axis=1).transpose().reset_index(drop=True)
         summary_seqs.index.name = 'fold'
-        summary_seqs.to_csv(base_path+'/summary-pooled_val_accuracy.csv')
+        summary_seqs.to_csv(base_path+'/summary-pooled_val_acc.csv')
         
         print("+++++ Seqs eval results:")
         mean = summary_seqs.mean().rename('mean')

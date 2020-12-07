@@ -15,7 +15,7 @@ def find_best_weights(base_path, criteria='val_loss', verbose=0):
         
         if criteria.endswith('loss'):
             best_epoch = rerun_df.loc[rerun_df[criteria].idxmin()]
-        elif criteria.endswith('accuracy'):
+        elif criteria.endswith('acc'):
             sorted_rerun_df = rerun_df.sort_values([criteria, 'val_loss'], 
                 ascending=[False, True])
             best_epoch = sorted_rerun_df.iloc[0]
@@ -28,17 +28,17 @@ def find_best_weights(base_path, criteria='val_loss', verbose=0):
     if criteria.endswith('loss'):
         best_rerun = summary_df.loc[summary_df[criteria].idxmin()]
         weights_path = best_rerun.path + 'relnet_weights.hdf5'
-    elif criteria.endswith('accuracy'):
+    elif criteria.endswith('acc'):
         sorted_summary_df = summary_df.sort_values([criteria, 'val_loss'], 
             ascending=[False, True])
         best_rerun = sorted_summary_df.iloc[0]
-        weights_path = best_rerun.path + 'relnet_weights-val_accuracy.hdf5'
+        weights_path = best_rerun.path + 'relnet_weights-val_acc.hdf5'
     
     if verbose > 0:
         print("Best weights stats:")
         best_rerun_df = best_rerun.to_frame().transpose()
         best_rerun_df = best_rerun_df.astype(
-            {'accuracy': 'float', 'loss': 'float', 'val_accuracy': 'float', 'val_loss': 'float'})
+            {'acc': 'float', 'loss': 'float', 'val_acc': 'float', 'val_loss': 'float'})
         pretty_print_stats(best_rerun_df)
 
     return weights_path

@@ -23,8 +23,8 @@ def load_args():
     # Optional arguments
     ap.add_argument('-c','--criteria',
         help="criteria for picking the best epoch",
-        default='val_accuracy',
-        choices=['val_accuracy', 'val_loss'])
+        default='val_acc',
+        choices=['val_acc', 'val_loss'])
     ap.add_argument('-p','--plot',
         help="plot accuracies and losses curves",
         action='store_true')
@@ -44,7 +44,7 @@ def load_args():
     
     return args
 
-def parse_train_log(train_log_filepath, criteria='val_accuracy', top_k=10, plot=True,
+def parse_train_log(train_log_filepath, criteria='val_acc', top_k=10, plot=True,
         skip_epochs=50, trunc_epochs=None):
     if not train_log_filepath.endswith(('.log','.csv')):
         train_log_filepath = os.path.join(train_log_filepath, 'training.log')
@@ -56,7 +56,7 @@ def parse_train_log(train_log_filepath, criteria='val_accuracy', top_k=10, plot=
     if criteria.endswith('loss'):
         sorted_log_df = train_log_df.sort_values([criteria, 'epoch'], 
             ascending=[True, False])
-    elif criteria.endswith('accuracy'):
+    elif criteria.endswith('acc'):
         sorted_log_df = train_log_df.sort_values([criteria, 'epoch'], 
             ascending=[False, False])
     
@@ -65,7 +65,7 @@ def parse_train_log(train_log_filepath, criteria='val_accuracy', top_k=10, plot=
     if plot:
         fig, axes = plt.subplots(nrows=1, ncols=2)
         
-        train_log_df[skip_epochs:].plot.line(x='epoch', y=['accuracy','val_accuracy'], ax=axes[0])
+        train_log_df[skip_epochs:].plot.line(x='epoch', y=['acc','val_acc'], ax=axes[0])
         train_log_df[skip_epochs:].plot.line(x='epoch', y=['loss','val_loss'], ax=axes[1])
         
         plt.show()

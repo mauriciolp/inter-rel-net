@@ -18,7 +18,7 @@ def load_args():
     # Optional arguments
     ap.add_argument('-c','--criteria',
         help="criteria for picking the best epoch",
-        choices=['val_accuracy', 'val_loss'])
+        choices=['val_acc', 'val_loss'])
     ap.add_argument('-u','--update',
         help="update summary file (overwrite)",
         action='store_true')
@@ -41,8 +41,8 @@ def read_runs(summary_dir, criteria=None, seqs_eval=False):
         run_filename = '/fit_history.csv'
         log_filename = '/training.log'
     else:
-        summary_filename = '/summary-pooled_val_accuracy.csv'
-        run_filename = '/pooled_val_accuracy.csv'
+        summary_filename = '/summary-pooled_val_acc.csv'
+        run_filename = '/pooled_val_acc.csv'
         log_filename = run_filename
     
     hist_paths = glob.glob(summary_dir+'/fold_*'+summary_filename)
@@ -76,7 +76,7 @@ def read_runs(summary_dir, criteria=None, seqs_eval=False):
             fold_best_epochs = read_runs(rerun_dir, criteria=criteria, seqs_eval=seqs_eval)
             if fold_best_epochs != []:
                 fold_df = pd.concat(fold_best_epochs, axis=1, sort=False).T.reset_index(drop=True)
-                best_rerun = fold_reruns_dirs[fold_df.val_accuracy.idxmax()]
+                best_rerun = fold_reruns_dirs[fold_df.val_acc.idxmax()]
                 best_hist = glob.glob(best_rerun + run_filename) + glob.glob(best_rerun + log_filename)
                 
                 rerun_hist = [ best_hist[0] ]
@@ -92,7 +92,7 @@ def read_runs(summary_dir, criteria=None, seqs_eval=False):
         
         if criteria.endswith('loss'):
             best_epoch = hist_df.loc[hist_df[criteria].idxmin()]
-        elif criteria.endswith('accuracy'):
+        elif criteria.endswith('acc'):
             if not seqs_eval: # Central frames only
                 sorted_hist_df = hist_df.sort_values([criteria, 'val_loss'], 
                     ascending=[False, True])
@@ -108,14 +108,14 @@ def pretty_print_stats(stats_df, short_version=False, seqs_eval=False):
     acc_tpl = "{:.2%}".format
     loss_tpl = "{:.4f}".format
     epoc_tpl = "{:.0f}".format
-    print_order = ['accuracy','loss','val_accuracy','val_loss','epoch']
+    print_order = ['acc','loss','val_acc','val_loss','epoch']
     
     if short_version:
-        print_order = ['val_accuracy','val_loss']
+        print_order = ['val_acc','val_loss']
         stats_df = stats_df[stats_df.index == 'mean']
     
     if seqs_eval:
-        print_order = ['val_accuracy']
+        print_order = ['val_acc']
     
     print(stats_df[print_order].to_string(
         formatters=[acc_tpl,loss_tpl,acc_tpl,loss_tpl,epoc_tpl]))
@@ -124,10 +124,10 @@ def print_train_stats(summary_dir, criteria=None, update=False, seqs_eval=False)
     if not seqs_eval: # Central frames only
         summary_filename = '/summary.csv'
     else:
-        summary_filename = '/summary-pooled_val_accuracy.csv'
+        summary_filename = '/summary-pooled_val_acc.csv'
     
     if not os.path.exists(summary_dir+summary_filename):
-        criteria = 'val_accuracy'
+        criteria = 'val_acc'
 
     if criteria is None:
         summary_df = pd.read_csv(summary_dir+summary_filename, index_col=False)
@@ -144,13 +144,13 @@ def print_train_stats(summary_dir, criteria=None, update=False, seqs_eval=False)
     if update:
         summary_df.to_csv(summary_dir+summary_filename)
     
-    max = summary_df.loc[summary_df['val_accuracy'].idxmax()].rename('max')
+    max = summary_df.loc[summary_df['val_acc'].idxmax()].rename('max')
     mean = summary_df.mean().rename('mean')
     std = summary_df.std().rename('std')
     stats = pd.concat([max,mean,std], axis=1).T
 
     pretty_print_stats(summary_df, seqs_eval=seqs_eval)
-    print(stats[['val_accuracy']].T.to_string(float_format="{:.1%}".format))
+    print(stats[['val_acc']].T.to_string(float_format="{:.1%}".format))
 
 def print_protocol_stats(summary_dir, criteria=None):
     pass

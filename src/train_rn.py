@@ -110,17 +110,17 @@ def set_callbacks(output_path, checkpoint_period, batch_size, use_earlyStopping=
     tensorBoard = TensorBoard(log_dir, batch_size=batch_size, write_graph=False)
     callbacks_list.append(tensorBoard)
     
-    filepath = os.path.join(output_path, "relnet_weights-val_accuracy-temp.hdf5")
-    modelCheckpoint_val_accuracy = ModelCheckpoint(filepath, verbose=0,
-                    save_best_only=True, monitor='val_accuracy',
+    filepath = os.path.join(output_path, "relnet_weights-val_acc-temp.hdf5")
+    modelCheckpoint_val_acc = ModelCheckpoint(filepath, verbose=0,
+                    save_best_only=True, monitor='val_acc',
                     save_weights_only=True, period=checkpoint_period)
-    callbacks_list.append(modelCheckpoint_val_accuracy)
+    callbacks_list.append(modelCheckpoint_val_acc)
     
-    auxModelCheckpoint_val_accuracy = AuxModelCheckpoint(filepath)
-    callbacks_list.append(auxModelCheckpoint_val_accuracy)
+    auxModelCheckpoint_val_acc = AuxModelCheckpoint(filepath)
+    callbacks_list.append(auxModelCheckpoint_val_acc)
     
     if use_earlyStopping:
-        earlyStopping = EarlyStopping(monitor='val_accuracy', min_delta=0, patience=100, 
+        earlyStopping = EarlyStopping(monitor='val_acc', min_delta=0, patience=100, 
             verbose=0)
         callbacks_list.append(earlyStopping)
     
@@ -180,9 +180,9 @@ def train_model(model, verbose, learning_rate, output_path, checkpoint_period,
             callbacks=callbacks_list,
             shuffle=True)
     
-    max_acc = np.max(fit_history.history['accuracy'])
+    max_acc = np.max(fit_history.history['acc'])
     min_loss = np.min(fit_history.history['loss'])
-    val_max_acc = np.max(fit_history.history['val_accuracy'])
+    val_max_acc = np.max(fit_history.history['val_acc'])
     val_min_loss = np.min(fit_history.history['val_loss'])
     
     if verbose > 0:
