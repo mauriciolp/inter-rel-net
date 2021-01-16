@@ -1,5 +1,5 @@
 # Interaction Relational Network
-Code used at paper "Interaction Relational Network for Mutual Action Recognition".
+Code used at paper "Interaction Relational Network for Mutual Action Recognition" in IEEE Transactions on Multimedia (TMM).
 
 It contains an implementation of our Interaction Relational Network (IRN), an end-to-end NN tailored for Interaction Recognition using Skeleton information. 
 
@@ -7,16 +7,16 @@ It contains an implementation of our Interaction Relational Network (IRN), an en
     <img src="./summary_IRN.png", width="450">
 </div>
 
-More details at the preprint: https://arxiv.org/abs/1910.04963
+More details in the journal paper: https://arxiv.org/abs/1910.04963
+And in the preprint: https://arxiv.org/abs/1910.04963
 
 ```
-@misc{perez2019interaction,
-    title={Interaction Relational Network for Mutual Action Recognition},
+@article{perez2021interaction,
     author={Mauricio Perez and Jun Liu and Alex C. Kot},
-    year={2019},
-    eprint={1910.04963},
-    archivePrefix={arXiv},
-    primaryClass={cs.CV}
+    title={Interaction Relational Network for Mutual Action Recognition},
+    journal={IEEE Transactions on Multimedia (TMM)}, 
+    year={2021},
+    doi={10.1109/TMM.2021.3050642}
 }
 ```
 
