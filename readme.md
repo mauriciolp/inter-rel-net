@@ -7,8 +7,7 @@ It contains an implementation of our Interaction Relational Network (IRN), an en
     <img src="./summary_IRN.png", width="450">
 </div>
 
-More details in the journal paper: https://arxiv.org/abs/1910.04963
-And in the preprint: https://arxiv.org/abs/1910.04963
+More details in the journal paper: https://ieeexplore.ieee.org/document/9319533 (preprint: https://arxiv.org/abs/1910.04963)
 
 ```
 @article{perez2021interaction,
