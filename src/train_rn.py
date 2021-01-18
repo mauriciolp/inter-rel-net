@@ -240,11 +240,12 @@ def train_rn(output_path, dataset_name, model_kwargs, data_kwargs,
         if verbose > 0:
             print("> Using DataGenerator")
         train_generator = DataGenerator(dataset_name, dataset_fold, 'train',
-                batch_size=batch_size, reshuffle=True, shuffle_indiv_order=True, 
+                batch_size=batch_size, reshuffle=True, shuffle_indiv_order=(model_kwargs['rel_type'] != 'joint_stream'), 
                 **data_kwargs)
         val_generator = DataGenerator(dataset_name, dataset_fold, 'validation',
                 batch_size=batch_size, reshuffle=False, shuffle_indiv_order=False,
                 **data_kwargs)
+        
         X_train, Y_train = train_generator[0]
         X_val, Y_val = val_generator[0]
         
@@ -267,7 +268,10 @@ def train_rn(output_path, dataset_name, model_kwargs, data_kwargs,
     
     if verbose > 0:
         print("Creating model...")
-    
+
+    if(model_kwargs['rel_type'] == 'joint_stream'):
+        num_joints = len(X_train)
+
     model = get_model(num_objs=num_joints, object_shape=object_shape, 
         output_size=output_size, num_dim=num_dim, overhead=overhead,
         kernel_init_type=kernel_init_type, kernel_init_param=kernel_init_param, 

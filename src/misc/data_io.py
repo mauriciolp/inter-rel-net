@@ -414,7 +414,6 @@ def read_video_poses(video_gt, pose_style='OpenPose', normalization=None, prune=
     
     # Add 'zeros' person if there is a single person for the majority of the poses
     num_people_med = np.median([ len(frame_pose) for frame_pose in video_poses ])
-    num_peoples = np.array([ len(frame_pose) for frame_pose in video_poses ])
     if num_people_med == 1:
         zero_coords = np.zeros_like(video_poses[0][0]['coords'])
         for frame_pose in video_poses:
@@ -442,11 +441,12 @@ def insert_body_part(p1_and_p2, num_joints, scale, body_parts_mapping):
         body_part_idx = body_parts_mapping[idx]/scale
         p1_and_p2[idx].append(body_part_idx)
         p1_and_p2[idx+num_joints].append(body_part_idx)
-        
+
+# Called from each dataset
 def get_data(gt_split, pose_style, timesteps=16, skip_timesteps=None,
         add_joint_idx=True, add_body_part=True, normalization=None, 
         selected_joints=None, num_classes=None, prune=True, 
-        sample_method = 'central', seq_step=None, flat_seqs=False):
+        sample_method = 'central', seq_step=None, flat_seqs=False, arch=None):
     if pose_style == 'OpenPose':
         joint_indexing = POSE_BODY_25_BODY_PARTS
         body_parts_mapping = POSE_BODY_25_BODY_PARTS_COARSE
@@ -491,7 +491,7 @@ def get_data(gt_split, pose_style, timesteps=16, skip_timesteps=None,
             for idx, coord in enumerate(p2['coords']):
                 p2_all_joint_coords[idx] += coord.tolist()
         p1_and_p2 = np.array(p1_all_joint_coords + p2_all_joint_coords)
-        
+
         ### 1) Keeping only the central timesteps
         if sample_method == 'central':
             p1_and_p2.resize((num_joints*2, p1_and_p2.shape[1]//num_dim, num_dim))
@@ -548,8 +548,29 @@ def get_data(gt_split, pose_style, timesteps=16, skip_timesteps=None,
         num_classes = gt_split.action.max()+1
     Y = to_categorical(Y, num_classes)
     
-    # Input for the network must be (n_joints, n_samples, timesteps*num_dim)
+    # Input for the network must be (n_joints * 2 (for each person), n_samples, timesteps*num_dim + bodypart + joint_index)
+    # Dim 1 in format (p0_j0, p0_j1, p0_j2, ..., p1_j0, p1_j1,...)
+    # Dimension 3 in format (x_0, y_0, z_0, x_1, y_1, z_1)
     if sample_method == 'central' or flat_seqs:
         X = np.array(X).transpose((1,0,2)).tolist()
-    
+
+    # If using joint stream, want to convert to form (n_joints = 15, n_samples, timesteps * num_people (2) * num_dimension)
+    # Dimension 3 in format (x_p0_t0, y_p0_t0, z_p0_t0, x_p1_t0, y_p1_t0, z_p1_t0, x_p0_t1, y_po_t1, ...)
+    if arch == 'new':
+
+        X = np.array(X)
+        
+        # Separate timesteps and dimension axis
+        X = X.reshape((X.shape[0], X.shape[1], timesteps, num_dim))
+
+        # Separate joints of each person into two arrays
+        p1_joints = X[0:X.shape[0]//2]
+        p2_joints = X[X.shape[0]//2:X.shape[0]]
+
+        # Concatenate along dimension axis and collapse into single object
+        joint_stream = np.concatenate((p1_joints, p2_joints), axis=3)
+        joint_stream = joint_stream.reshape(joint_stream.shape[0], joint_stream.shape[1], joint_stream.shape[2] * joint_stream.shape[3])
+
+        X = joint_stream
+
     return X, Y

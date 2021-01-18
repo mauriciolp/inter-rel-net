@@ -146,7 +146,7 @@ def create_relationships(rel_type, g_theta_model, p1_joints, p2_joints):
                 g_theta_outs.append(g_theta_model([object_i, object_j]))
         rel_out = Average()(g_theta_outs)
     elif rel_type == 'intra' or rel_type == 'indivs':
-        # g_theta_indiv = g_theta(model_name="g_theta_indiv", **g_theta_kwargs)
+
         indiv1_avg = create_relationships('p1_p1_all', g_theta_model, 
             p1_joints, p2_joints)
         
@@ -234,32 +234,61 @@ def create_top(input_top, kernel_init, drop_rate=0, fc_units=[500,100,100],
 
 def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
         drop_rate=0, fuse_type=None, fc_drop=False, **g_theta_kwargs):
-    person1_joints = []
-    person2_joints = []
-    for i in range(num_objs):
-        object_i = Input(shape=object_shape, name="person1_object"+str(i))
-        object_j = Input(shape=object_shape, name="person2_object"+str(i))
-        person1_joints.append(object_i)
-        person2_joints.append(object_j)
-    
-    if fuse_type is None:
+
+    # For Joint Stream, similar structure except have one object for joint of both individuals
+    # Object shape should correspond to timesteps * num_people (2) * num_dimension
+    if rel_type == 'joint_stream':
+        joint_stream_objects = []
+
+        for i in range(num_objs): # num_objs = num_joints
+            joint_stream_input = Input(shape=object_shape, name="joint_object_"+str(i))
+            joint_stream_objects.append(joint_stream_input)
+
+        # G theta does not change, object size does not change
         g_theta_model = g_theta(object_shape, kernel_init=kernel_init, 
             drop_rate=drop_rate, model_name="g_theta_"+rel_type, **g_theta_kwargs)
-        x = create_relationships(rel_type, g_theta_model, 
-            person1_joints, person2_joints)
+        
+        # Create relationships between all joint stream objects (similar to intra)
+        x = create_relationships('p1_p1_all', g_theta_model, 
+            joint_stream_objects, None)
+
+        # Top of network f model    
+        out_f_phi = create_top(x, kernel_init, fc_units=fc_units, drop_rate=drop_rate,
+            fc_drop=fc_drop)
+        
+        f_phi_ins = joint_stream_objects
+        model = Model(inputs=f_phi_ins, outputs=out_f_phi, name="f_phi")
+        
+        return model        
+
     else:
-        x = fuse_rel_models(fuse_type, person1_joints, person2_joints,
-            object_shape=object_shape, kernel_init=kernel_init, 
-            drop_rate=drop_rate, **g_theta_kwargs)
-    
-    
-    out_f_phi = create_top(x, kernel_init, fc_units=fc_units, drop_rate=drop_rate,
-        fc_drop=fc_drop)
-    
-    f_phi_ins = person1_joints + person2_joints
-    model = Model(inputs=f_phi_ins, outputs=out_f_phi, name="f_phi")
-    
-    return model
+        person1_joints = []
+        person2_joints = []
+
+        for i in range(num_objs):
+            object_i = Input(shape=object_shape, name="person1_object"+str(i))
+            object_j = Input(shape=object_shape, name="person2_object"+str(i))
+            person1_joints.append(object_i)
+            person2_joints.append(object_j)
+        
+        if fuse_type is None:
+            g_theta_model = g_theta(object_shape, kernel_init=kernel_init, 
+                drop_rate=drop_rate, model_name="g_theta_"+rel_type, **g_theta_kwargs)
+            x = create_relationships(rel_type, g_theta_model, 
+                person1_joints, person2_joints)
+        else:
+            x = fuse_rel_models(fuse_type, person1_joints, person2_joints,
+                object_shape=object_shape, kernel_init=kernel_init, 
+                drop_rate=drop_rate, **g_theta_kwargs)
+        
+        
+        out_f_phi = create_top(x, kernel_init, fc_units=fc_units, drop_rate=drop_rate,
+            fc_drop=fc_drop)
+        
+        f_phi_ins = person1_joints + person2_joints
+        model = Model(inputs=f_phi_ins, outputs=out_f_phi, name="f_phi")
+        
+        return model
 
 def g_theta(object_shape, kernel_init, drop_rate=0, fc_drop=False, compute_distance=False, 
         compute_motion=False, model_name="g_theta", num_dim=None, overhead=None):
