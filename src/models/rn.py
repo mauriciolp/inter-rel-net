@@ -236,13 +236,14 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
         drop_rate=0, fuse_type=None, fc_drop=False, **g_theta_kwargs):
 
     # For Joint Stream, similar structure except have one object for joint of both individuals
+    # For Temporal stream, have one object per timestep
     # Object shape should correspond to timesteps * num_people (2) * num_dimension
-    if rel_type == 'joint_stream':
-        joint_stream_objects = []
+    if rel_type == 'joint_stream' or rel_type == 'temp_stream':
+        augmented_stream_objects = []
 
         for i in range(num_objs): # num_objs = num_joints
-            joint_stream_input = Input(shape=object_shape, name="joint_object_"+str(i))
-            joint_stream_objects.append(joint_stream_input)
+            augmented_stream_input = Input(shape=object_shape, name="joint_object_"+str(i))
+            augmented_stream_objects.append(augmented_stream_input)
 
         # G theta does not change, object size does not change
         g_theta_model = g_theta(object_shape, kernel_init=kernel_init, 
@@ -250,13 +251,13 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
         
         # Create relationships between all joint stream objects (similar to intra)
         x = create_relationships('p1_p1_all', g_theta_model, 
-            joint_stream_objects, None)
+            augmented_stream_objects, None)
 
         # Top of network f model    
         out_f_phi = create_top(x, kernel_init, fc_units=fc_units, drop_rate=drop_rate,
             fc_drop=fc_drop)
         
-        f_phi_ins = joint_stream_objects
+        f_phi_ins = augmented_stream_objects
         model = Model(inputs=f_phi_ins, outputs=out_f_phi, name="f_phi")
         
         return model        
