@@ -131,7 +131,7 @@ def set_callbacks(output_path, checkpoint_period, batch_size, use_earlyStopping=
 
 def train_model(model, verbose, learning_rate, output_path, checkpoint_period, 
         batch_size, epochs, use_data_gen, train_data, val_data, subsample_ratio,
-        use_earlyStopping=True):
+        use_earlyStopping=True, data_len = None):
     if verbose > 0:
         print("Compiling model...")
     model.compile(loss='categorical_crossentropy',
@@ -150,9 +150,14 @@ def train_model(model, verbose, learning_rate, output_path, checkpoint_period,
         train_generator = train_data
         val_generator = val_data
         
+        validation_steps = None
+
+        # if data_len is None:
+        #     data_len = len(train_generator)
+        #     validation_steps = 1
+
         steps_per_epoch = (None if subsample_ratio is None else
             int(subsample_ratio*len(train_generator)))
-        validation_steps = None
         
         if subsample_ratio is not None and verbose > 0:
             print("Train num batches:", len(train_generator))
@@ -285,15 +290,22 @@ def train_rn(output_path, dataset_name, model_kwargs, data_kwargs,
     
     return fit_history
 
+def getFusedGenerator(train_data):
+    while True:
+        (x, y) = train_data.next()
+        yield [x[0], x[1], y]
+
 def train_fused_rn(output_path, dataset_name, dataset_fold,
         config_filepaths, weights_filepaths,
         batch_size=32, epochs=100, checkpoint_period=5, learning_rate=1e-4, 
-        drop_rate=0.1, freeze_g_theta=False, fuse_at_fc1=False,
+        drop_rate=0.1, freeze_g_theta=False, fuse_at_fc1=False, new_arch=False,
         initial_epoch=0, initial_weights=None, use_data_gen = True,
         subsample_ratio=None,
         gpus=1,verbose=2):
     
     data_kwargs, _, _ = read_config(config_filepaths[0])
+    if new_arch:
+        data_kwargs['arch'] = 'joint_temp_fused'
     
     if verbose > 0:
         print("***** Training parameters *****")
@@ -305,6 +317,7 @@ def train_fused_rn(output_path, dataset_name, dataset_fold,
         print("\t > weights_filepaths:", weights_filepaths)
         print("\t > freeze_g_theta:", freeze_g_theta)
         print("\t > fuse_at_fc1:", fuse_at_fc1)
+        print("\t > New architecture:", new_arch)
         print("\t Training options")
         print("\t > Batch Size:", batch_size)
         print("\t > Epochs:", epochs)
@@ -332,8 +345,9 @@ def train_fused_rn(output_path, dataset_name, dataset_fold,
         val_generator = DataGenerator(dataset_name, dataset_fold, 'validation',
                 batch_size=batch_size, reshuffle=False, shuffle_indiv_order=False,
                 **data_kwargs)
-        X_train, Y_train = train_generator[0]
-        X_val, Y_val = val_generator[0]
+
+        X_train, Y_train = train_generator.getSampleData(0, new_arch)
+        X_val, Y_val = val_generator.getSampleData(0, new_arch)
         train_data = train_generator
         val_data = val_generator
     else:
@@ -342,36 +356,97 @@ def train_fused_rn(output_path, dataset_name, dataset_fold,
         train_data = [X_train, Y_train]
         val_data = [X_val, Y_val]
     
-    num_joints = len(X_train)//2
-    object_shape = (len(X_train[0][0]),)
-    output_size = len(Y_train[0])
-    
     models_kwargs = []
-    for config_filepath in config_filepaths:
-        data_kwargs, model_kwargs, train_kwargs = read_config(config_filepath)
-        timesteps = data_kwargs['timesteps']
-        add_joint_idx = data_kwargs['add_joint_idx']
-        add_body_part = data_kwargs['add_body_part']
-        overhead = add_joint_idx + add_body_part # True/False = 1/0
-        num_dim = (object_shape[0]-overhead)//timesteps
-        model_kwargs['num_dim'] = num_dim
-        model_kwargs['overhead'] = overhead
-        models_kwargs.append(model_kwargs)
+    output_size = len(Y_train[0])
+
+    if new_arch:
+        check_configs = []
+        for config_filepath in config_filepaths:
+            data_kwargs, model_kwargs, train_kwargs = read_config(config_filepath)
+            check_configs.append(model_kwargs)
+
+        # Ensure that temporal stream and joint stream both included. Reorder if necessary so that joint stream first.
+        if(len(check_configs) != 2):
+            print("Error: Expecting Joint Stream and Temporal Stream")
+            exit(0)
+        
+        # Should reorder both weights and config.
+        if(check_configs[0]['rel_type'] == 'temp_stream'):
+            config_filepaths.reverse()
+            weights_filepaths.reverse()
+
+        check_configs = []
+        for config_filepath in config_filepaths:
+            data_kwargs, model_kwargs, train_kwargs = read_config(config_filepath)
+            check_configs.append(model_kwargs)
+
+        # Ensure that both joint and temporal stream exist
+        if(check_configs[0]['rel_type'] != 'joint_stream' or check_configs[1]['rel_type'] != 'temp_stream'):
+            print("Error: Expecting Joint Stream and Temporal Stream")
+            exit(0)
+
+        # Ensure X_train has two components
+        if(len(X_train) != 2):
+            print("Error: Expecting X_train to consist of both joint and temporal components")
+            exit(0)
+
+        for config_filepath, X_train_comp in zip(config_filepaths, X_train):
+            num_joints = len(X_train_comp)
+            object_shape = (len(X_train_comp[0][0]),)
+            output_size = len(Y_train[0])
+
+            data_kwargs, model_kwargs, train_kwargs = read_config(config_filepath)
+            timesteps = data_kwargs['timesteps']
+            add_joint_idx = data_kwargs['add_joint_idx']
+            add_body_part = data_kwargs['add_body_part']
+            overhead = add_joint_idx + add_body_part # True/False = 1/0
+            num_dim = (object_shape[0]-overhead)//timesteps
+            model_kwargs['num_dim'] = num_dim
+            model_kwargs['overhead'] = overhead
+            model_kwargs['num_objs'] = num_joints
+            model_kwargs['object_shape'] = object_shape
+
+            models_kwargs.append(model_kwargs)
+   
+    else:
+        num_joints = len(X_train)//2
+        object_shape = (len(X_train[0][0]),)
+
+        for config_filepath in config_filepaths:
+            data_kwargs, model_kwargs, train_kwargs = read_config(config_filepath)
+            timesteps = data_kwargs['timesteps']
+            add_joint_idx = data_kwargs['add_joint_idx']
+            add_body_part = data_kwargs['add_body_part']
+            overhead = add_joint_idx + add_body_part # True/False = 1/0
+            num_dim = (object_shape[0]-overhead)//timesteps
+            model_kwargs['num_dim'] = num_dim
+            model_kwargs['overhead'] = overhead
+            model_kwargs['num_objs'] = num_joints
+            model_kwargs['object_shape'] = object_shape
+            models_kwargs.append(model_kwargs)
     
     train_kwargs['drop_rate'] = drop_rate
+
     if verbose > 0:
         print("Creating model...")
-    model = fuse_rn(num_joints, object_shape, output_size, train_kwargs,
+    model = fuse_rn(output_size, new_arch, train_kwargs,
         models_kwargs, weights_filepaths, freeze_g_theta=freeze_g_theta, 
         fuse_at_fc1=fuse_at_fc1)
     
     if initial_weights is not None:
         model.load_weights(initial_weights)
+
+    data_len = None
+    # if new_arch and use_data_gen:
+    #     data_len = len(train_data)
+    #     train_data = getFusedGenerator(train_data)
+    #     val_data = getFusedGenerator(val_data)
+    #     subsample_ratio = 1
     
     fit_history = train_model(model=model, verbose=verbose, learning_rate=learning_rate, 
         output_path=output_path, checkpoint_period=checkpoint_period, 
         batch_size=batch_size, epochs=epochs, use_data_gen=use_data_gen, 
-        train_data=train_data, val_data=val_data, subsample_ratio=subsample_ratio)
+        train_data=train_data, val_data=val_data, subsample_ratio=subsample_ratio, data_len=data_len)
     
     return fit_history
 

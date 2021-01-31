@@ -556,46 +556,52 @@ def get_data(gt_split, pose_style, timesteps=16, skip_timesteps=None,
 
     # If using joint stream, want to convert to form (n_joints = 15, n_samples, timesteps * num_people (2) * num_dimension)
     # Dimension 3 in format (x_p0_t0, y_p0_t0, z_p0_t0, x_p1_t0, y_p1_t0, z_p1_t0, x_p0_t1, y_po_t1, ...)
-    if arch == 'joint':
+    if arch == 'joint' or arch == 'joint_temp_fused':
 
-        X = np.array(X)
+        new_x = np.array(X)
         
         # Separate timesteps and dimension axis
-        X = X.reshape((X.shape[0], X.shape[1], timesteps, num_dim))
+        new_x = new_x.reshape((new_x.shape[0], new_x.shape[1], timesteps, num_dim))
 
         # Separate joints of each person into two arrays
-        p1_joints = X[0:X.shape[0]//2]
-        p2_joints = X[X.shape[0]//2:X.shape[0]]
+        p1_joints = new_x[0:new_x.shape[0]//2]
+        p2_joints = new_x[new_x.shape[0]//2:new_x.shape[0]]
 
         # Concatenate along dimension axis and collapse into single object
         joint_stream = np.concatenate((p1_joints, p2_joints), axis=3)
         joint_stream = joint_stream.reshape(joint_stream.shape[0], joint_stream.shape[1], joint_stream.shape[2] * joint_stream.shape[3])
 
-        X = joint_stream
+        if arch != 'joint_temp_fused':
+            X = joint_stream
 
     # If using temp stream, want to convert to form (n_joints = timesteps, n_samples, num_joints * num_people(2) * num_dimenson)
     # Dimension 3 in format (x_p0_j0, y_p0_j0, z_p0_j0, x_p1_j0, y_p1_j0, z_p1_j0, x_p0_j1, ...)
-    elif arch == 'temp':
-        X = np.array(X)
+    
+    if arch == 'temp' or arch == 'joint_temp_fused':
+        new_x = np.array(X)
         
         # Separate timesteps and dimension axis
-        X = X.reshape((X.shape[0], X.shape[1], timesteps, num_dim))
+        new_x = new_x.reshape((new_x.shape[0], new_x.shape[1], timesteps, num_dim))
 
         # Separate joints of each person into two arrays
-        p1_joints = X[0:X.shape[0]//2]
-        p2_joints = X[X.shape[0]//2:X.shape[0]]
+        p1_joints = new_x[0:new_x.shape[0]//2]
+        p2_joints = new_x[new_x.shape[0]//2:new_x.shape[0]]
 
         
         # Concatenate along dimension axis
         # New form is (joints, num_samples, timesteps, person*num_dimension)
-        joint_stream = np.concatenate((p1_joints, p2_joints), axis=3)
+        temp_stream = np.concatenate((p1_joints, p2_joints), axis=3)
         
         # New form is (timesteps, num_samples, joints, person*num_dimensions)
-        joint_stream = np.transpose(joint_stream, axes=(2, 1, 0, 3))
+        temp_stream = np.transpose(temp_stream, axes=(2, 1, 0, 3))
 
         # Collapse into final form
-        joint_stream = joint_stream.reshape(joint_stream.shape[0], joint_stream.shape[1], joint_stream.shape[2] * joint_stream.shape[3])
+        temp_stream = temp_stream.reshape(temp_stream.shape[0], temp_stream.shape[1], temp_stream.shape[2] * temp_stream.shape[3])
 
-        X = joint_stream
+        if arch != 'joint_temp_fused':
+            X = temp_stream
+
+    if arch == 'joint_temp_fused':
+        return ([joint_stream, temp_stream], Y)
 
     return X, Y

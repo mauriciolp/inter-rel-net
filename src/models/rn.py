@@ -241,7 +241,7 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
     if rel_type == 'joint_stream' or rel_type == 'temp_stream':
         augmented_stream_objects = []
 
-        for i in range(num_objs): # num_objs = num_joints
+        for i in range(num_objs): # num_objs = num_joints or num_timesteps
             augmented_stream_input = Input(shape=object_shape, name="joint_object_"+str(i))
             augmented_stream_objects.append(augmented_stream_input)
 
@@ -348,13 +348,12 @@ def g_theta(object_shape, kernel_init, drop_rate=0, fc_drop=False, compute_dista
     
     return model
 
-def fuse_rn(num_objs, object_shape, output_size, train_kwargs,
+def fuse_rn(output_size, new_arch, train_kwargs,
         models_kwargs, weights_filepaths, freeze_g_theta=False, fuse_at_fc1=False):
-    
+
     prunned_models = []
     for model_kwargs, weights_filepath in zip(models_kwargs, weights_filepaths):
-        model = get_model(num_objs=num_objs, object_shape=object_shape, 
-            output_size=output_size, **model_kwargs)
+        model = get_model(output_size=output_size, **model_kwargs)
         if weights_filepath != []:
             model.load_weights(weights_filepath)
         
@@ -385,20 +384,37 @@ def fuse_rn(num_objs, object_shape, output_size, train_kwargs,
     kernel_init = get_kernel_init(kernel_init_type, param=kernel_init_param, 
         seed=kernel_init_seed)
     
-    # Building bottom
-    person1_joints = []
-    person2_joints = []
-    for i in range(num_objs):
-        object_i = Input(shape=object_shape, name="person1_object"+str(i))
-        object_j = Input(shape=object_shape, name="person2_object"+str(i))
-        person1_joints.append(object_i)
-        person2_joints.append(object_j)
-    inputs = person1_joints + person2_joints
-    
-    models_outs = [ m(inputs) for m in prunned_models ]
-    
+    if new_arch:
+        # Building bottom
+        joint_stream_objects = []
+        temp_stream_objects = []
+
+        for i in range(models_kwargs[0]['num_objs']):
+            obj_joint = Input(shape=models_kwargs[0]['object_shape'], name="joint_stream_object"+str(i))
+            joint_stream_objects.append(obj_joint)
+
+        for i in range(models_kwargs[1]['num_objs']):
+            obj_temp = Input(shape=models_kwargs[1]['object_shape'], name="temp_stream_object"+str(i))
+            temp_stream_objects.append(obj_temp)
+        
+        inputs = joint_stream_objects + temp_stream_objects
+        models_outs = [ prunned_models[0](joint_stream_objects), prunned_models[1](temp_stream_objects) ]
+
+    else:
+        # Building bottom
+        person1_joints = []
+        person2_joints = []
+        for i in range(model_kwargs['num_objs']):
+            object_i = Input(shape=model_kwargs[0]['object_shape'], name="person1_object"+str(i))
+            object_j = Input(shape=model_kwargs[0]['object_shape'], name="person2_object"+str(i))
+            person1_joints.append(object_i)
+            person2_joints.append(object_j)
+        inputs = person1_joints + person2_joints
+        
+        models_outs = [ m(inputs) for m in prunned_models ]
+        
     x = Concatenate()(models_outs)
-    
+        
     # Building top and Model
     top_kwargs = get_relevant_kwargs(model_kwargs, create_top) 
     x = create_top(x, kernel_init, **top_kwargs)

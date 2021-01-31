@@ -88,6 +88,9 @@ class DataGenerator(Sequence):
         return self.num_batches
     
     def __getitem__(self, idx):
+        return self.getSampleData(idx, False)
+
+    def getSampleData(self, idx, new_arch_sample):
         batch_idxs = self.shuffled_idx[
             self.batch_size*idx:self.batch_size*(idx+1)]
         
@@ -112,7 +115,7 @@ class DataGenerator(Sequence):
             NUM_PEOPLE = 2
             NUM_DIM = 3
 
-            if self.data_kwargs['arch'] == 'joint' or self.data_kwargs['arch'] == 'temp':
+            if 'arch' in self.data_kwargs and (self.data_kwargs['arch'] == 'joint' or self.data_kwargs['arch'] == 'temp'):
                 # Convert to form (num joints, num samples, timesteps, num people, num dimensions) for joint stream
                 # Convert to form (timesteps, num_samples, num_joints, num_people, num_dimensions) for temporal stream
                 batch_x = batch_x.reshape((batch_x.shape[0], batch_x.shape[1], batch_x.shape[2]//(NUM_PEOPLE*NUM_DIM), NUM_PEOPLE, NUM_DIM))
@@ -123,6 +126,32 @@ class DataGenerator(Sequence):
 
                 # Reshape it to old form
                 batch_x = batch_x.reshape((batch_x.shape[0], batch_x.shape[1], batch_x.shape[2] * batch_x.shape[3] * batch_x.shape[4]))
+
+            elif 'arch' in self.data_kwargs and self.data_kwargs['arch'] == 'joint_temp_fused':
+
+                new_batch_x = []
+                # Iterate over both streams
+                for batch_x_comp in batch_x:
+                    # Convert to form (num joints, num samples, timesteps, num people, num dimensions) for joint stream
+                    # Convert to form (timesteps, num_samples, num_joints, num_people, num_dimensions) for temporal stream
+                    batch_x_comp = batch_x_comp.reshape((batch_x_comp.shape[0], batch_x_comp.shape[1], batch_x_comp.shape[2]//(NUM_PEOPLE*NUM_DIM), NUM_PEOPLE, NUM_DIM))
+                    
+                    # For half of the samples in the batch, we want to flip the people axis
+                    swap_index = np.random.choice(batch_x_comp.shape[1], batch_x_comp.shape[1]//2, replace=False)
+                    batch_x_comp[:,swap_index] = np.flip(batch_x_comp[:,swap_index], axis=3)
+
+                    # Reshape it to old form
+                    batch_x_comp = batch_x_comp.reshape((batch_x_comp.shape[0], batch_x_comp.shape[1], batch_x_comp.shape[2] * batch_x_comp.shape[3] * batch_x_comp.shape[4]))
+                    
+                    batch_x_comp = [ np.array(input) for input in batch_x_comp]
+
+                    # For fused model during training, must append to single list of 25 instead of multiple lists
+                    if new_arch_sample:
+                        new_batch_x.append(batch_x_comp)
+                    else:
+                        new_batch_x += batch_x_comp
+
+                return new_batch_x, batch_y
 
             else:
                 ### Always swap half of the batch
@@ -150,12 +179,18 @@ class DataGenerator(Sequence):
                 swap_index = sorted(np.random.choice(list(range(batch_y.shape[0])), 
                     batch_y.shape[0]//2, replace=False))
                 batch_x = np.array(batch_x)
-                print(batch_x.shape)
-                print(batch_y.shape)
                 batch_x[:,swap_index] = np.squeeze(
                     batch_x[p2_joints + p1_joints][:,[swap_index]], axis=1)
                 
         batch_x = [ np.array(input) for input in batch_x]
+        
+        # Must append to single list of 25 for training and validation
+        if 'arch' in self.data_kwargs and self.data_kwargs['arch'] == 'joint_temp_fused' and not new_arch_sample:
+            batch_x[0] = [ np.array(input) for input in batch_x[0]]
+            batch_x[1] = [ np.array(input) for input in batch_x[1]]
+
+            batch_x = batch_x[0] + batch_x[1]
+
         return batch_x, batch_y
     
     def on_epoch_end(self):
