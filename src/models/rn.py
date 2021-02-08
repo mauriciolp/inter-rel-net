@@ -1,6 +1,7 @@
 from keras.layers import Dense, Dropout, Concatenate, Input
 from keras.layers import Add, Maximum, Average, Subtract, Lambda
 from keras.models import Model
+from models.attention import IRNAttention
 
 from keras import initializers
 
@@ -133,7 +134,7 @@ def fuse_rel_models(fuse_type, person1_joints, person2_joints, **g_theta_kwargs)
         raise ValueError("Invalid fuse_type:", fuse_type)
     return x
 
-def create_relationships(rel_type, g_theta_model, p1_joints, p2_joints):
+def create_relationships(rel_type, g_theta_model, p1_joints, p2_joints, use_attention=False):
     g_theta_outs = []
     
     if rel_type == 'inter' or rel_type == 'p1_p2_all_bidirectional':
@@ -188,7 +189,10 @@ def create_relationships(rel_type, g_theta_model, p1_joints, p2_joints):
             for object_j in p1_joints[idx+1:]:
             # for object_j in p1_joints[idx:]:
                 g_theta_outs.append(g_theta_model([object_i, object_j]))
-        rel_out = Average()(g_theta_outs)
+        if use_attention:
+            rel_out = IRNAttention()(g_theta_outs)
+        else:
+            rel_out = Average()(g_theta_outs)
     elif rel_type == 'p2_p2_all':
         # All joints from person2 connected to all other joints of itself
         rel_out = create_relationships(
@@ -219,6 +223,7 @@ def create_relationships(rel_type, g_theta_model, p1_joints, p2_joints):
 
 def create_top(input_top, kernel_init, drop_rate=0, fc_units=[500,100,100], 
         fc_drop=False):
+
     x = Dropout(drop_rate)(input_top)
     
     x = Dense(fc_units[0], activation='relu', kernel_initializer=kernel_init, 
@@ -233,7 +238,7 @@ def create_top(input_top, kernel_init, drop_rate=0, fc_units=[500,100,100],
     return x
 
 def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
-        drop_rate=0, fuse_type=None, fc_drop=False, **g_theta_kwargs):
+        drop_rate=0, fuse_type=None, fc_drop=False, use_attention=False, **g_theta_kwargs):
 
     # For Joint Stream, similar structure except have one object for joint of both individuals
     # For Temporal stream, have one object per timestep
@@ -251,7 +256,7 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
         
         # Create relationships between all joint stream objects (similar to intra)
         x = create_relationships('p1_p1_all', g_theta_model, 
-            augmented_stream_objects, None)
+            augmented_stream_objects, None, use_attention=use_attention)
 
         # Top of network f model    
         out_f_phi = create_top(x, kernel_init, fc_units=fc_units, drop_rate=drop_rate,
@@ -284,7 +289,7 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
         
         
         out_f_phi = create_top(x, kernel_init, fc_units=fc_units, drop_rate=drop_rate,
-            fc_drop=fc_drop)
+            fc_drop=fc_drop, use_attention=use_attention)
         
         f_phi_ins = person1_joints + person2_joints
         model = Model(inputs=f_phi_ins, outputs=out_f_phi, name="f_phi")

@@ -10,4 +10,4 @@ python3 src/run_protocol.py IRN_inter_random configs/SBU/IRN_inter_random.cfg SB
 python3 src/run_protocol.py IRN_intra_random configs/SBU/IRN_intra_random.cfg SBU -n 1
 python3 src/run_protocol.py IRN_inter_intra_random configs/SBU/IRN_inter+intra_random.cfg SBU -F middle -n 1
 
-
+python3 src/run_protocol.py IRN_two_stream configs/SBU/IRN_two_stream.cfg SBU -F middle -n 1

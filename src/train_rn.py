@@ -152,10 +152,6 @@ def train_model(model, verbose, learning_rate, output_path, checkpoint_period,
         
         validation_steps = None
 
-        # if data_len is None:
-        #     data_len = len(train_generator)
-        #     validation_steps = 1
-
         steps_per_epoch = (None if subsample_ratio is None else
             int(subsample_ratio*len(train_generator)))
         
