@@ -45,13 +45,12 @@ class IRNAttention(keras.layers.Layer):
         out_1 = self.layer_1(inputs)
         # (N, W, Projection_size) -> (N, W, H)
         out_2 = self.layer_2(out_1)
-        print(out_2.shape)
         # Second dimension, W, will sum to one
         attention = tf.exp(out_2)
         # Adding a small constant to the normalizing factor in case everything
         # is zero
         # (N, W, H)/(N, 1, W, H).sum(dim=2) -> (N, W, H)
-        attention = attention / (K.sum(K.expand_dims(attention, axis=1), axis=1) + 0.0000001)
+        attention = attention / (K.sum(K.expand_dims(attention, axis=1), axis=2) + 0.0000001)
 
         # (N, W, I) -> (N, I, W)
         inputs = tf.transpose(inputs, perm=[0,2,1])

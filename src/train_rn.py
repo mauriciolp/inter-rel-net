@@ -294,7 +294,7 @@ def getFusedGenerator(train_data):
 def train_fused_rn(output_path, dataset_name, dataset_fold,
         config_filepaths, weights_filepaths,
         batch_size=32, epochs=100, checkpoint_period=5, learning_rate=1e-4, 
-        drop_rate=0.1, freeze_g_theta=False, fuse_at_fc1=False, new_arch=False,
+        drop_rate=0.1, freeze_g_theta=False, fuse_at_fc1=False, new_arch=False, avg_at_end=False,
         initial_epoch=0, initial_weights=None, use_data_gen = True,
         subsample_ratio=None,
         gpus=1,verbose=2):
@@ -427,7 +427,7 @@ def train_fused_rn(output_path, dataset_name, dataset_fold,
         print("Creating model...")
     model = fuse_rn(output_size, new_arch, train_kwargs,
         models_kwargs, weights_filepaths, freeze_g_theta=freeze_g_theta, 
-        fuse_at_fc1=fuse_at_fc1)
+        fuse_at_fc1=fuse_at_fc1, avg_at_end=avg_at_end)
     
     if initial_weights is not None:
         model.load_weights(initial_weights)

@@ -134,8 +134,19 @@ def fuse_rel_models(fuse_type, person1_joints, person2_joints, **g_theta_kwargs)
         raise ValueError("Invalid fuse_type:", fuse_type)
     return x
 
-def create_relationships(rel_type, g_theta_model, p1_joints, p2_joints, use_attention=False):
+def create_relationships(rel_type, g_theta_model, p1_joints, p2_joints, use_attention=False, use_relations=True):
     g_theta_outs = []
+
+    if not use_relations:
+        for object_i in p1_joints:
+            g_theta_outs.append(g_theta_model([object_i]))
+
+        if use_attention:
+            rel_out = IRNAttention()(g_theta_outs)
+        else:
+            rel_out = Average()(g_theta_outs)
+
+        return rel_out
     
     if rel_type == 'inter' or rel_type == 'p1_p2_all_bidirectional':
         # All joints from person1 connected to all joints of person2, and back
@@ -238,7 +249,7 @@ def create_top(input_top, kernel_init, drop_rate=0, fc_units=[500,100,100],
     return x
 
 def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
-        drop_rate=0, fuse_type=None, fc_drop=False, use_attention=False, **g_theta_kwargs):
+        drop_rate=0, fuse_type=None, fc_drop=False, use_attention=False, use_relations=True, **g_theta_kwargs):
 
     # For Joint Stream, similar structure except have one object for joint of both individuals
     # For Temporal stream, have one object per timestep
@@ -252,11 +263,11 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
 
         # G theta does not change, object size does not change
         g_theta_model = g_theta(object_shape, kernel_init=kernel_init, 
-            drop_rate=drop_rate, model_name="g_theta_"+rel_type, **g_theta_kwargs)
+            drop_rate=drop_rate, use_relations=use_relations, model_name="g_theta_"+rel_type, **g_theta_kwargs)
         
         # Create relationships between all joint stream objects (similar to intra)
         x = create_relationships('p1_p1_all', g_theta_model, 
-            augmented_stream_objects, None, use_attention=use_attention)
+            augmented_stream_objects, None, use_attention=use_attention, use_relations=use_relations)
 
         # Top of network f model    
         out_f_phi = create_top(x, kernel_init, fc_units=fc_units, drop_rate=drop_rate,
@@ -279,9 +290,9 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
         
         if fuse_type is None:
             g_theta_model = g_theta(object_shape, kernel_init=kernel_init, 
-                drop_rate=drop_rate, model_name="g_theta_"+rel_type, **g_theta_kwargs)
-            x = create_relationships(rel_type, g_theta_model, 
-                person1_joints, person2_joints)
+                drop_rate=drop_rate, use_relations=use_relations, model_name="g_theta_"+rel_type, **g_theta_kwargs)
+            x = create_relationships(rel_type, g_theta_model,
+                person1_joints, person2_joints, use_attention=use_attention)
         else:
             x = fuse_rel_models(fuse_type, person1_joints, person2_joints,
                 object_shape=object_shape, kernel_init=kernel_init, 
@@ -289,7 +300,7 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
         
         
         out_f_phi = create_top(x, kernel_init, fc_units=fc_units, drop_rate=drop_rate,
-            fc_drop=fc_drop, use_attention=use_attention)
+            fc_drop=fc_drop)
         
         f_phi_ins = person1_joints + person2_joints
         model = Model(inputs=f_phi_ins, outputs=out_f_phi, name="f_phi")
@@ -297,7 +308,7 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
         return model
 
 def g_theta(object_shape, kernel_init, drop_rate=0, fc_drop=False, compute_distance=False, 
-        compute_motion=False, model_name="g_theta", num_dim=None, overhead=None):
+        compute_motion=False, use_relations=True, model_name="g_theta", num_dim=None, overhead=None):
     if compute_motion or compute_distance:
         timesteps = (object_shape[0]-overhead)//num_dim
     def euclideanDistance(inputs):
@@ -319,9 +330,12 @@ def g_theta(object_shape, kernel_init, drop_rate=0, fc_drop=False, compute_dista
         return output
     
     object_i = Input(shape=object_shape, name="object_i")
-    object_j = Input(shape=object_shape, name="object_j")
+    g_theta_inputs = object_i
+
+    if use_relations:
+        object_j = Input(shape=object_shape, name="object_j")
+        g_theta_inputs = [object_i, object_j]
     
-    g_theta_inputs = [object_i, object_j]
     if compute_distance:
         distances = Lambda(euclideanDistance, 
             output_shape=lambda inp_shp: (inp_shp[0][0], timesteps),
@@ -334,7 +348,10 @@ def g_theta(object_shape, kernel_init, drop_rate=0, fc_drop=False, compute_dista
             name=model_name+'_motionMerge')([object_i, object_j])
         g_theta_inputs.append(motions)
         
-    x = Concatenate()(g_theta_inputs)
+    if use_relations:
+        x = Concatenate()(g_theta_inputs)
+    else:
+        x = g_theta_inputs
     
     x = Dense(1000, activation='relu', kernel_initializer=kernel_init,
         name=model_name+"_fc1")(x)
@@ -349,12 +366,15 @@ def g_theta(object_shape, kernel_init, drop_rate=0, fc_drop=False, compute_dista
         name=model_name+"_fc4")(x)
         # name="g_theta_fc4")(x)
     
-    model = Model(inputs=[object_i, object_j], outputs=out_g_theta, name=model_name)
+    if use_relations:
+        model = Model(inputs=[object_i, object_j], outputs=out_g_theta, name=model_name)
+    else:
+        model = Model(inputs=[object_i], outputs=out_g_theta, name=model_name)
     
     return model
 
 def fuse_rn(output_size, new_arch, train_kwargs,
-        models_kwargs, weights_filepaths, freeze_g_theta=False, fuse_at_fc1=False):
+        models_kwargs, weights_filepaths, freeze_g_theta=False, fuse_at_fc1=False, avg_at_end=False):
 
     prunned_models = []
     for model_kwargs, weights_filepath in zip(models_kwargs, weights_filepaths):
@@ -362,18 +382,20 @@ def fuse_rn(output_size, new_arch, train_kwargs,
         if weights_filepath != []:
             model.load_weights(weights_filepath)
         
-        if not fuse_at_fc1:
+        if not fuse_at_fc1 and not avg_at_end:
             for layer in model.layers[::-1]: # reverse looking for last pool layer
-                if layer.name.startswith(('average','concatenate')):
+                if layer.name.startswith(('average','concatenate','irn_attention')):
                     out_pool = layer.output
                     break
             prunned_model = Model(inputs=model.input, outputs=out_pool)
-        else: # Prune keeping dropout + f_phi_fc1
+        elif fuse_at_fc1: # Prune keeping dropout + f_phi_fc1
             for layer in model.layers[::-1]: # reverse looking for last f_phi_fc1 layer
                 if layer.name.startswith(('f_phi_fc1')):
                     out_f_phi_fc1 = layer.output
                     break
             prunned_model = Model(inputs=model.input, outputs=out_f_phi_fc1)
+        elif avg_at_end:
+            prunned_model = Model(inputs=model.input, outputs=model.output)
         
         if freeze_g_theta:
             for layer in prunned_model.layers: # Freezing model
@@ -418,14 +440,18 @@ def fuse_rn(output_size, new_arch, train_kwargs,
         
         models_outs = [ m(inputs) for m in prunned_models ]
         
-    x = Concatenate()(models_outs)
-        
-    # Building top and Model
-    top_kwargs = get_relevant_kwargs(model_kwargs, create_top) 
-    x = create_top(x, kernel_init, **top_kwargs)
+    if not avg_at_end:
+        x = Concatenate()(models_outs)
+            
+        # Building top and Model
+        top_kwargs = get_relevant_kwargs(model_kwargs, create_top) 
+        x = create_top(x, kernel_init, **top_kwargs)
+        out_rn = Dense(output_size, activation='softmax', 
+            kernel_initializer=kernel_init, name='softmax')(x)
+    else:
+        # Model outputs already include individual soft max
+        out_rn = Average()(models_outs)
     
-    out_rn = Dense(output_size, activation='softmax', 
-        kernel_initializer=kernel_init, name='softmax')(x)
     model = Model(inputs=inputs, outputs=out_rn, name="fused_rel_net")
     
     return model
