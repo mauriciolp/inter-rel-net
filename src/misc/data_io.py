@@ -106,14 +106,24 @@ def prune_people(people):
     
     return prunned_people
 
-def parse_json(json_filepath, prune=True):
-    with open(json_filepath) as json_file:
-        frame_data = json.load(json_file)
+def parse_json(json_filepath, prune=True, pose_style='OpenPose', ymja_frame_data = None):
     
     people = []
-    for person in frame_data['people']:
+    if pose_style == 'OpenPose':
+        with open(json_filepath) as json_file:
+            frame_data = json.load(json_file)
+        iter_list = frame_data['people']
+    elif pose_style == 'YMJA':
+        frame_data = ymja_frame_data
+        iter_list = [frame_data['perp'], frame_data['victim']]
+
+    for person in iter_list:
         per = {}
-        pose_keypoints_2d = person['pose_keypoints_2d']
+        if pose_style == 'OpenPose':
+            pose_keypoints_2d = person['pose_keypoints_2d']
+        elif pose_style == 'YMJA':
+            pose_keypoints_2d = person
+
         coords_x = pose_keypoints_2d[0::3]
         coords_y = pose_keypoints_2d[1::3]
         confidences = pose_keypoints_2d[2::3]
@@ -121,7 +131,7 @@ def parse_json(json_filepath, prune=True):
         per['coords'] = coords
         per['confs'] = confidences
         people.append(per)
-    
+
     if prune:
         people = prune_people(people)
     
@@ -175,7 +185,7 @@ def apply_NTU_normalization(video_poses, pose_style):
         and “spine”, 'MidHip' and 'Neck' are respectively used instead.
     """
     
-    if pose_style == 'OpenPose':
+    if pose_style == 'OpenPose' or pose_style == 'YMJA':
         joint_indexing = POSE_BODY_25_BODY_PARTS
     elif pose_style == 'SBU':
         joint_indexing = SBU_15_BODY_PARTS
@@ -303,7 +313,8 @@ def track_bodies(video_poses):
     # null_joints = np.array([ [-1, -1] for _ in range(25) ])
     null_joints = np.array([ [0, 0] for _ in range(25) ])
     max_num_ppl = np.max([ len(frame_poses) for frame_poses in video_poses])
-    bodies_coords = [ [] for _ in range(max_num_ppl) ]
+    bodies_coords = [[] for _ in range(max_num_ppl)]
+    print(len(video_poses[0]))
     for pose_idx, pose in enumerate(video_poses[0]):
         bodies_coords[pose_idx].append(pose['coords'].tolist())
     for missing_idx in range(pose_idx+1,max_num_ppl):
@@ -371,19 +382,27 @@ def track_bodies(video_poses):
     return tracked_video_poses
 
 def read_video_poses(video_gt, pose_style='OpenPose', normalization=None, prune=True):
-    if pose_style == 'OpenPose':
-        video_keypoints_dir = video_gt.path
-        json_list = glob.glob(video_keypoints_dir+'/*.json')
-        json_list.sort()
-        
-        if json_list == []:
-            raise FileNotFoundError("Error reading keypoints at: "+video_keypoints_dir)
+    if pose_style == 'OpenPose' or pose_style == 'YMJA':
 
         video_poses = []
-        for json_file in json_list:
-            people = parse_json(json_file, prune)
-            video_poses.append(people)
-        
+        if pose_style == 'OpenPose':
+            video_keypoints_dir = video_gt.path
+            json_list = glob.glob(video_keypoints_dir+'/*.json')
+            json_list.sort()
+            
+            if json_list == []:
+                raise FileNotFoundError("Error reading keypoints at: "+video_keypoints_dir)
+
+            for json_file in json_list:
+                people = parse_json(json_file, prune)
+                video_poses.append(people)
+        # YMJA
+        else:
+            with open(video_gt.path) as json_file:
+                frames_data = json.load(json_file)
+                for frame_data in frames_data:
+                    people = parse_json(video_gt.path, prune, 'YMJA', frame_data)
+                    video_poses.append(people)
         if prune:
             tracked_video_poses = track_bodies(video_poses)
             pruned_video_poses = prune_bodies(tracked_video_poses)
@@ -445,9 +464,9 @@ def insert_body_part(p1_and_p2, num_joints, scale, body_parts_mapping):
 # Called from each dataset
 def get_data(gt_split, pose_style, timesteps=16, skip_timesteps=None,
         add_joint_idx=True, add_body_part=True, normalization=None, 
-        selected_joints=None, num_classes=None, prune=True, 
+        selected_joints=None, num_classes=None, prune=False, 
         sample_method = 'central', seq_step=None, flat_seqs=False, arch=None):
-    if pose_style == 'OpenPose':
+    if pose_style == 'OpenPose' or pose_style == 'YMJA':
         joint_indexing = POSE_BODY_25_BODY_PARTS
         body_parts_mapping = POSE_BODY_25_BODY_PARTS_COARSE
     elif pose_style == 'SBU':

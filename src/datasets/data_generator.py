@@ -3,7 +3,7 @@ import numpy as np
 
 from keras.utils import Sequence
 
-from datasets import UT, SBU, NTU, NTU_V2
+from datasets import UT, SBU, NTU, NTU_V2, YMJA
 from misc.data_io import get_data
 
 class DataGenerator(Sequence):
@@ -17,6 +17,9 @@ class DataGenerator(Sequence):
         elif dataset_name == 'SBU':
             dataset = SBU
             self.pose_style = 'SBU'
+        elif dataset_name == 'YMJA':
+            dataset = YMJA
+            self.pose_style = 'YMJA'
         elif dataset_name == 'NTU':
             dataset = NTU
             self.pose_style = 'NTU'
@@ -114,6 +117,8 @@ class DataGenerator(Sequence):
         if self.shuffle_indiv_order:
             NUM_PEOPLE = 2
             NUM_DIM = 3
+            if self.pose_style == 'YMJA':
+                NUM_DIM = 2
 
             if 'arch' in self.data_kwargs and (self.data_kwargs['arch'] == 'joint' or self.data_kwargs['arch'] == 'temp'):
                 # Convert to form (num joints, num samples, timesteps, num people, num dimensions) for joint stream
@@ -216,6 +221,10 @@ class DataGeneratorSeq(Sequence):
             dataset = SBU
             max_framenum = 46
             self.pose_style = 'SBU'
+        elif dataset_name == 'YMJA':
+            dataset = YMJA
+            max_framenum = 64
+            self.pose_style = 'YMJA'
         elif dataset_name == 'NTU':
             dataset = NTU
             max_framenum = 300 # for all videos

@@ -56,7 +56,6 @@ def get_ground_truth(data_dir=DATA_DIR):
                      'path': path_lst,
                      'action': action_lst}
     ground_truth = pd.DataFrame(dataframe_dict)
-    
     return ground_truth
 
 def get_folds():

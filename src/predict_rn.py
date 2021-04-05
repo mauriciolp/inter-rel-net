@@ -9,7 +9,7 @@ if int(tf.__version__.split('.')[1]) >= 14:
 from keras.metrics import categorical_accuracy
 import keras.backend as K
     
-from datasets import UT, SBU, NTU, NTU_V2
+from datasets import UT, SBU, NTU, NTU_V2, YMJA
 from datasets.data_generator import DataGenerator
 from models.rn import get_model, fuse_rn
 from misc.utils import read_config
@@ -32,7 +32,7 @@ def load_args():
     ap.add_argument('-d','--dataset-name',
         help="dataset to be used for predicting",
         default='UT',
-        choices=['UT', 'SBU', 'NTU', 'NTU_V2'])
+        choices=['UT', 'SBU', 'NTU', 'NTU_V2', 'YMJA'])
     ap.add_argument('-f','--dataset-fold',
         help="dataset fold to be used for predicting",
         default=9,
@@ -95,6 +95,8 @@ def predict_rn(weights_path, dataset_name, model_kwargs, data_kwargs,
         dataset = SBU
     elif dataset_name == 'NTU':
         dataset = NTU
+    elif dataset_name == 'YMJA':
+        dataset = YMJA
     
     if verbose > 0:
         print("Reading data...")
@@ -159,6 +161,8 @@ def predict_rn_seq(weights_path, dataset_name, model_kwargs, data_kwargs,
         dataset = SBU
     elif dataset_name == 'NTU':
         dataset = NTU
+    elif dataset_name == 'YMJA':
+        dataset = YMJA
     
     if verbose > 0:
         print("Reading data...")
@@ -387,6 +391,8 @@ def predict_fused_rn_seq(fusion_weights_path, dataset_name, dataset_fold,
         dataset = SBU
     elif dataset_name == 'NTU':
         dataset = NTU
+    elif dataset_name == 'YMJA':
+        dataset = YMJA
     
     data_kwargs, _, _ = read_config(config_filepaths[0])
     

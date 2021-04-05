@@ -1,5 +1,6 @@
 import numpy as np
 import argparse, sys, os, time
+import csv
 
 import tensorflow as tf
 if int(tf.__version__.split('.')[1]) >= 14:
@@ -8,11 +9,14 @@ if int(tf.__version__.split('.')[1]) >= 14:
 from keras.optimizers import SGD
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, CSVLogger, Callback
-    
-from datasets import UT, SBU, NTU, NTU_V2
+from keras import backend as K
+
+from datasets import UT, SBU, NTU, NTU_V2, YMJA
 from datasets.data_generator import DataGenerator
 from models.rn import get_model, fuse_rn
 from misc.utils import read_config
+
+from sklearn.metrics import classification_report, confusion_matrix
 
 #%% Functions
 def load_args():
@@ -29,7 +33,7 @@ def load_args():
     ap.add_argument('-d','--dataset-name',
         help="dataset to be used for training",
         default='UT',
-        choices=['UT', 'SBU', 'NTU_V2', 'NTU'])
+        choices=['UT', 'SBU', 'NTU_V2', 'NTU', 'YMJA'])
     ap.add_argument('-f','--dataset-fold',
         help="dataset fold to be used for training",
         default=9,
@@ -93,9 +97,14 @@ class AuxModelCheckpoint(Callback):
         if os.path.exists(self.filepath):
             os.rename(self.filepath, self.new_filepath)
 
-def set_callbacks(output_path, checkpoint_period, batch_size, use_earlyStopping=True):
+def set_callbacks(output_path, checkpoint_period, batch_size, use_earlyStopping=True, return_attention=False):
     callbacks_list = []
     
+    if return_attention:
+        monitor_acc = 'val_model_acc'
+    else:
+        monitor_acc = 'val_acc'
+
     checkpoint_filename = ("relnet_weights-temp.hdf5")
     filepath = os.path.join(output_path, checkpoint_filename)
     modelCheckpoint = ModelCheckpoint(filepath, verbose=0,
@@ -112,7 +121,7 @@ def set_callbacks(output_path, checkpoint_period, batch_size, use_earlyStopping=
     
     filepath = os.path.join(output_path, "relnet_weights-val_acc-temp.hdf5")
     modelCheckpoint_val_acc = ModelCheckpoint(filepath, verbose=0,
-                    save_best_only=True, monitor='val_acc',
+                    save_best_only=True, monitor=monitor_acc,
                     save_weights_only=True, period=checkpoint_period)
     callbacks_list.append(modelCheckpoint_val_acc)
     
@@ -120,28 +129,51 @@ def set_callbacks(output_path, checkpoint_period, batch_size, use_earlyStopping=
     callbacks_list.append(auxModelCheckpoint_val_acc)
     
     if use_earlyStopping:
-        earlyStopping = EarlyStopping(monitor='val_acc', min_delta=0, patience=100, 
+        earlyStopping = EarlyStopping(monitor=monitor_acc, min_delta=0, patience=100, 
             verbose=0)
         callbacks_list.append(earlyStopping)
-    
     csvLogger = CSVLogger(output_path + '/training.log', append=True)
     callbacks_list.append(csvLogger)
     
     return callbacks_list
 
+def recall_m(y_true, y_pred):
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    recall = true_positives / (possible_positives + K.epsilon())
+    return recall
+
+def precision_m(y_true, y_pred):
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    precision = true_positives / (predicted_positives + K.epsilon())
+    return precision
+
+def f1_m(y_true, y_pred):
+    precision = precision_m(y_true, y_pred)
+    recall = recall_m(y_true, y_pred)
+    return 2*((precision*recall)/(precision+recall+K.epsilon()))
+
 def train_model(model, verbose, learning_rate, output_path, checkpoint_period, 
         batch_size, epochs, use_data_gen, train_data, val_data, subsample_ratio,
-        use_earlyStopping=True, data_len = None):
+        use_earlyStopping=True, data_len = None, return_attention=False):
     if verbose > 0:
-        print("Compiling model...")
-    model.compile(loss='categorical_crossentropy',
+        print ("Compiling model...")
+        
+    if return_attention:
+        model.compile(loss=['categorical_crossentropy', None], # Don't train attention
                 optimizer=Adam(lr=learning_rate),
-                metrics=['accuracy'],
+                metrics=['accuracy',recall_m, precision_m, f1_m],
+                )
+    else:
+        model.compile(loss='categorical_crossentropy',
+                optimizer=Adam(lr=learning_rate),
+                metrics=['accuracy',recall_m, precision_m, f1_m],
                 )
     
     # Setting up Callbacks
     callbacks_list = set_callbacks(output_path, checkpoint_period, batch_size,
-        use_earlyStopping=use_earlyStopping)
+        use_earlyStopping=use_earlyStopping, return_attention=return_attention)
     
     if verbose > 0:
         print("Starting training...")
@@ -158,7 +190,7 @@ def train_model(model, verbose, learning_rate, output_path, checkpoint_period,
         if subsample_ratio is not None and verbose > 0:
             print("Train num batches:", len(train_generator))
             print("Train steps:", steps_per_epoch)
-        
+
         fit_history = model.fit_generator(train_generator,
             epochs=epochs,
             steps_per_epoch=steps_per_epoch,
@@ -168,6 +200,37 @@ def train_model(model, verbose, learning_rate, output_path, checkpoint_period,
             workers=4, max_queue_size=8, # Default is 10
             use_multiprocessing=True,
             verbose=verbose)
+        
+        # Get Y_true values
+        Y_val = []
+        for batch_idx in range(len(val_generator)):
+            _, y_val = val_generator[batch_idx]
+            Y_val += y_val.tolist()
+
+        Y_pred = model.predict_generator(val_generator, max_queue_size=10, workers=5, 
+            use_multiprocessing=True, verbose=verbose)
+
+        if return_attention:
+            Y_pred, attention = Y_pred
+
+        # Convert back from to_categorical
+        Y_pred = np.argmax(Y_pred, axis=1, out=None).tolist()
+        Y_val = np.argmax(Y_val, axis=1, out=None).tolist()
+        
+        # Write attention info to file
+        if return_attention:
+            with open(output_path + '/attention.csv', 'w') as csv_att:
+                csv_att.write("Actual,Predicted")
+                for i in range(attention.shape[1]):
+                    csv_att.write(",Object_" + str(i))
+                csv_att.write("\n")
+                for i in range(len(Y_pred)):
+                    csv_att.write(str(Y_val[i]) + "," + str(Y_pred[i]))
+                    for j in range(attention.shape[1]):
+                        csv_att.write("," + str(attention[i][j][0]))
+                    csv_att.write("\n")
+        
+
     else:
         X_train, Y_train = train_data
         X_val, Y_val = val_data
@@ -181,15 +244,39 @@ def train_model(model, verbose, learning_rate, output_path, checkpoint_period,
             callbacks=callbacks_list,
             shuffle=True)
     
+    # In case of multiple outputs, will print name with model output that want to remove
+    new_fit_history = {}
+    for metric in fit_history.history:
+        new_metric = metric.replace("model_", "")
+        new_fit_history[new_metric] = fit_history.history[metric]
+    fit_history.history = new_fit_history
+
+    # Rewrite training.log with correct names
+    with open(output_path + '/training.log', 'r+') as csvfile:
+        csv_reader = csv.reader(csvfile, delimiter=',')
+        rows = []
+        for row in csv_reader:
+            rows.append(row)
+        
+        csvfile.seek(0)
+
+        csv_writer = csv.writer(csvfile, delimiter=',')
+        for idx, row in enumerate(rows):
+            if idx == 0:
+                csv_writer.writerow(list(new_fit_history.keys()))
+            else:
+                csv_writer.writerow(row)
+        csvfile.truncate()
+
     max_acc = np.max(fit_history.history['acc'])
     min_loss = np.min(fit_history.history['loss'])
     val_max_acc = np.max(fit_history.history['val_acc'])
-    val_min_loss = np.min(fit_history.history['val_loss'])
+    val_min_loss = np.min(fit_history.history['val_loss'])                                                          
     
     if verbose > 0:
         print("Train - Max ACC: {:.2%} Min loss: {:.4f}".format(max_acc, min_loss))
         print("Valid - Max ACC: {:.2%} Min loss: {:.4f}".format(val_max_acc, val_min_loss))
-    
+
     return fit_history
 
 def train_rn(output_path, dataset_name, model_kwargs, data_kwargs,
@@ -226,6 +313,8 @@ def train_rn(output_path, dataset_name, model_kwargs, data_kwargs,
         dataset = UT
     elif dataset_name == 'SBU':
         dataset = SBU
+    elif dataset_name == 'YMJA':
+        dataset = YMJA
     elif dataset_name == 'NTU':
         dataset = NTU
         use_data_gen = True # Unable to read all data at once, dataset too big.
@@ -278,11 +367,15 @@ def train_rn(output_path, dataset_name, model_kwargs, data_kwargs,
         kernel_init_type=kernel_init_type, kernel_init_param=kernel_init_param, 
         kernel_init_seed=kernel_init_seed, drop_rate=drop_rate,
         **model_kwargs)
+
+    return_attention = False
+    if 'return_attention' in model_kwargs:
+        return_attention = model_kwargs['return_attention']
     
     fit_history = train_model(model=model, verbose=verbose, learning_rate=learning_rate, 
         output_path=output_path, checkpoint_period=checkpoint_period, 
         batch_size=batch_size, epochs=epochs, use_data_gen=use_data_gen, 
-        train_data=train_data, val_data=val_data, subsample_ratio=subsample_ratio)
+        train_data=train_data, val_data=val_data, subsample_ratio=subsample_ratio, return_attention=return_attention)
     
     return fit_history
 
@@ -330,6 +423,8 @@ def train_fused_rn(output_path, dataset_name, dataset_fold,
         dataset = UT
     elif dataset_name == 'SBU':
         dataset = SBU
+    elif dataset_name == 'YMJA':
+        dataset = YMJA
     
     if verbose > 0:
         print("Reading data...")
@@ -421,6 +516,9 @@ def train_fused_rn(output_path, dataset_name, dataset_fold,
             model_kwargs['object_shape'] = object_shape
             models_kwargs.append(model_kwargs)
     
+    for mod_kwargs in models_kwargs:
+        mod_kwargs['return_attention'] = False # Don't return attention for fused mdels
+
     train_kwargs['drop_rate'] = drop_rate
 
     if verbose > 0:
@@ -433,11 +531,6 @@ def train_fused_rn(output_path, dataset_name, dataset_fold,
         model.load_weights(initial_weights)
 
     data_len = None
-    # if new_arch and use_data_gen:
-    #     data_len = len(train_data)
-    #     train_data = getFusedGenerator(train_data)
-    #     val_data = getFusedGenerator(val_data)
-    #     subsample_ratio = 1
     
     fit_history = train_model(model=model, verbose=verbose, learning_rate=learning_rate, 
         output_path=output_path, checkpoint_period=checkpoint_period, 

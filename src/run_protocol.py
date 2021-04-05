@@ -3,7 +3,7 @@ import argparse, sys, os, time
 import pandas as pd
 from shutil import copyfile
 
-from datasets import UT, SBU, NTU, NTU_V2
+from datasets import UT, SBU, NTU, NTU_V2, YMJA
 
 from train_rn import train_rn, train_fused_rn
 from train_temp_rn import train_temp_rn, train_fused_temp_rn
@@ -27,7 +27,7 @@ def load_args():
         type=str)
     ap.add_argument('dataset_name',
         help='Name of the dataset to run the protocol.',
-        choices=['UT-1','UT-2','SBU','NTU','NTU-V2'],
+        choices=['UT-1','UT-2','SBU','NTU','NTU-V2', 'YMJA'],
         type=str)
     
     # Optional arguments
@@ -96,6 +96,9 @@ def run_protocol(experiment_name, config_filepath, dataset_name, num_reruns=2,
     elif dataset_name == 'SBU':
         dataset_folds = SBU.get_folds()
         dataset_codename = 'SBU'
+    elif dataset_name == 'YMJA':
+        dataset_folds = YMJA.get_folds()
+        dataset_codename = 'YMJA'
     elif dataset_name == 'NTU':
         dataset_folds = NTU.get_folds()
         dataset_codename = 'NTU'

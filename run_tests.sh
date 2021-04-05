@@ -13,15 +13,24 @@
 # python3 src/run_protocol.py IRN_te configs/SBU/IRN_temporal_stream.cfg SBU -n 1
 # python3 src/run_protocol.py IRN_two_stream configs/SBU/IRN_two_stream.cfg SBU -F middle -n 1
 
-# python3 src/run_protocol.py IRN_joint_att_proj_2500 configs/SBU/IRN_joint_stream_att.cfg SBU -n 1
-# python3 src/run_protocol.py IRN_temp_att_proj_2500 configs/SBU/IRN_temporal_stream_att.cfg SBU -n 1
-# python3 src/run_protocol.py IRN_two_stream_att_proj_2500 configs/SBU/IRN_two_stream_att.cfg SBU -F middle -n 1
+python3 src/run_protocol.py IRN_joint_att configs/SBU/IRN_joint_stream_att.cfg SBU -n 1
+python3 src/run_protocol.py IRN_temp_att configs/SBU/IRN_temporal_stream_att.cfg SBU -n 1
+python3 src/run_protocol.py IRN_two_stream_att configs/SBU/IRN_two_stream_att.cfg SBU -F middle -n 1
 
-# python3 src/run_protocol.py IRN_joint_att_no_rel_proj_2500 configs/SBU/IRN_joint_stream_att_no_rel.cfg SBU -n 1
-# python3 src/run_protocol.py IRN_temp_att_no_rel_proj_2500 configs/SBU/IRN_temporal_stream_att_no_rel.cfg SBU -n 1
-# python3 src/run_protocol.py IRN_two_stream_att_no_rel_proj_2500 configs/SBU/IRN_two_stream_att_no_rel.cfg SBU -F middle -n 1
+python3 src/run_protocol.py IRN_joint_att_proj_2000 configs/SBU/IRN_joint_stream_att_proj_2000.cfg SBU -n 1
+python3 src/run_protocol.py IRN_temp_att_proj_2000 configs/SBU/IRN_temporal_stream_att_proj_2000.cfg SBU -n 1
+python3 src/run_protocol.py IRN_two_stream_att_proj_2000 configs/SBU/IRN_two_stream_att_proj_2000.cfg SBU -F middle -n 1
 
-python3 src/run_protocol.py IRN_two_stream_avg configs/SBU/IRN_two_stream_avg.cfg SBU -F middle -n 1
+python3 src/run_protocol.py IRN_joint_att_no_rel configs/SBU/IRN_joint_stream_att_no_rel.cfg SBU -n 1
+python3 src/run_protocol.py IRN_temp_att_no_rel configs/SBU/IRN_temporal_stream_att_no_rel.cfg SBU -n 1
+python3 src/run_protocol.py IRN_two_stream_att_no_rel configs/SBU/IRN_two_stream_att_no_rel.cfg SBU -F middle -n 1
+
+python3 src/run_protocol.py IRN_joint_att_no_rel_proj_2000 configs/SBU/IRN_joint_stream_att_no_rel_proj_2000.cfg SBU -n 1
+python3 src/run_protocol.py IRN_temp_att_no_rel_proj_2000 configs/SBU/IRN_temporal_stream_att_no_rel_proj_2000.cfg SBU -n 1
+python3 src/run_protocol.py IRN_two_stream_att_no_rel_proj_2000 configs/SBU/IRN_two_stream_att_no_rel_proj_2000.cfg SBU -F middle -n 1
+
+
+# python3 src/run_protocol.py IRN_two_stream_avg configs/SBU/IRN_two_stream_avg.cfg SBU -F middle -n 1
 python3 src/run_protocol.py IRN_two_stream_att_avg configs/SBU/IRN_two_stream_att_avg.cfg SBU -F middle -n 1
 python3 src/run_protocol.py IRN_two_stream_att_no_rel_avg configs/SBU/IRN_two_stream_att_no_rel_avg.cfg SBU -F middle -n 1
-python3 src/run_protocol.py IRN_two_stream_no_rel_avg configs/SBU/IRN_two_stream_no_rel_avg.cfg SBU -F middle -n 1
+# python3 src/run_protocol.py IRN_two_stream_no_rel_avg configs/SBU/IRN_two_stream_no_rel_avg.cfg SBU -F middle -n 1

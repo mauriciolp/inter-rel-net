@@ -49,9 +49,15 @@ def get_model(num_objs, object_shape, rel_type, output_size,
     f_phi_model = f_phi(num_objs, object_shape, rel_type, 
         kernel_init=kernel_init, **f_and_g_kwargs)
     
-    out_rn = Dense(output_size, activation='softmax', 
-        kernel_initializer=kernel_init, name='softmax')(f_phi_model.output)
-    model = Model(inputs=f_phi_model.input, outputs=out_rn, name="rel_net")
+    if 'return_attention' in f_and_g_kwargs and f_and_g_kwargs['return_attention']:
+        out_rn = Dense(output_size, activation='softmax', 
+            kernel_initializer=kernel_init, name='model')(f_phi_model.output[0])
+        model = Model(inputs=f_phi_model.input, outputs=[out_rn, f_phi_model.output[1]], name="rel_net")
+    else:
+
+        out_rn = Dense(output_size, activation='softmax', 
+            kernel_initializer=kernel_init, name='softmax')(f_phi_model.output)
+        model = Model(inputs=f_phi_model.input, outputs=out_rn, name="rel_net")
     
     return model
 
@@ -134,7 +140,7 @@ def fuse_rel_models(fuse_type, person1_joints, person2_joints, **g_theta_kwargs)
         raise ValueError("Invalid fuse_type:", fuse_type)
     return x
 
-def create_relationships(rel_type, g_theta_model, p1_joints, p2_joints, use_attention=False, use_relations=True):
+def create_relationships(rel_type, g_theta_model, p1_joints, p2_joints, use_attention=False, use_relations=True, attention_proj_size=None, return_attention=False):
     g_theta_outs = []
 
     if not use_relations:
@@ -142,7 +148,8 @@ def create_relationships(rel_type, g_theta_model, p1_joints, p2_joints, use_atte
             g_theta_outs.append(g_theta_model([object_i]))
 
         if use_attention:
-            rel_out = IRNAttention()(g_theta_outs)
+            # Output may be tuple if return_attention is true, second element is attention vector
+            return IRNAttention(projection_size=attention_proj_size, return_attention=return_attention)(g_theta_outs)
         else:
             rel_out = Average()(g_theta_outs)
 
@@ -201,7 +208,7 @@ def create_relationships(rel_type, g_theta_model, p1_joints, p2_joints, use_atte
             # for object_j in p1_joints[idx:]:
                 g_theta_outs.append(g_theta_model([object_i, object_j]))
         if use_attention:
-            rel_out = IRNAttention()(g_theta_outs)
+            return IRNAttention(projection_size=attention_proj_size, return_attention=return_attention)(g_theta_outs)
         else:
             rel_out = Average()(g_theta_outs)
     elif rel_type == 'p2_p2_all':
@@ -249,7 +256,7 @@ def create_top(input_top, kernel_init, drop_rate=0, fc_units=[500,100,100],
     return x
 
 def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
-        drop_rate=0, fuse_type=None, fc_drop=False, use_attention=False, use_relations=True, **g_theta_kwargs):
+        drop_rate=0, fuse_type=None, fc_drop=False, use_attention=False, use_relations=True, projection_size=None, return_attention=False, **g_theta_kwargs):
 
     # For Joint Stream, similar structure except have one object for joint of both individuals
     # For Temporal stream, have one object per timestep
@@ -267,14 +274,22 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
         
         # Create relationships between all joint stream objects (similar to intra)
         x = create_relationships('p1_p1_all', g_theta_model, 
-            augmented_stream_objects, None, use_attention=use_attention, use_relations=use_relations)
+            augmented_stream_objects, None, use_attention=use_attention, use_relations=use_relations, attention_proj_size=projection_size, return_attention=return_attention)
+
+        # Must unpack attention from x
+        if return_attention:
+            x, attention = x
 
         # Top of network f model    
         out_f_phi = create_top(x, kernel_init, fc_units=fc_units, drop_rate=drop_rate,
             fc_drop=fc_drop)
         
         f_phi_ins = augmented_stream_objects
-        model = Model(inputs=f_phi_ins, outputs=out_f_phi, name="f_phi")
+
+        if return_attention:
+            model = Model(inputs=f_phi_ins, outputs=[out_f_phi, attention], name="f_phi")
+        else:
+            model = Model(inputs=f_phi_ins, outputs=out_f_phi, name="f_phi")
         
         return model        
 
@@ -292,7 +307,10 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
             g_theta_model = g_theta(object_shape, kernel_init=kernel_init, 
                 drop_rate=drop_rate, use_relations=use_relations, model_name="g_theta_"+rel_type, **g_theta_kwargs)
             x = create_relationships(rel_type, g_theta_model,
-                person1_joints, person2_joints, use_attention=use_attention)
+                person1_joints, person2_joints, use_attention=use_attention, use_relations=use_relations, attention_proj_size=projection_size, return_attention=return_attention)
+            
+            if return_attention: # Must unpack output
+                x, attention = x
         else:
             x = fuse_rel_models(fuse_type, person1_joints, person2_joints,
                 object_shape=object_shape, kernel_init=kernel_init, 
@@ -303,7 +321,12 @@ def f_phi(num_objs, object_shape, rel_type, kernel_init, fc_units=[500,100,100],
             fc_drop=fc_drop)
         
         f_phi_ins = person1_joints + person2_joints
-        model = Model(inputs=f_phi_ins, outputs=out_f_phi, name="f_phi")
+
+        if return_attention:
+            model = Model(inputs=f_phi_ins, outputs=[out_f_phi, attention], name="f_phi")
+        else:
+            model = Model(inputs=f_phi_ins, outputs=out_f_phi, name="f_phi")
+
         
         return model
 
@@ -432,8 +455,8 @@ def fuse_rn(output_size, new_arch, train_kwargs,
         person1_joints = []
         person2_joints = []
         for i in range(model_kwargs['num_objs']):
-            object_i = Input(shape=model_kwargs[0]['object_shape'], name="person1_object"+str(i))
-            object_j = Input(shape=model_kwargs[0]['object_shape'], name="person2_object"+str(i))
+            object_i = Input(shape=models_kwargs[0]['object_shape'], name="person1_object"+str(i))
+            object_j = Input(shape=models_kwargs[0]['object_shape'], name="person2_object"+str(i))
             person1_joints.append(object_i)
             person2_joints.append(object_j)
         inputs = person1_joints + person2_joints
